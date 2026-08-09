@@ -90,6 +90,18 @@ export async function fetchFoodEntries(date) {
   return data;
 }
 
+export async function fetchAllFoodEntriesByDay() {
+  const { data, error } = await supabase
+    .from('food_entries')
+    .select('date, kcal');
+  if (error) { console.error(error); return []; }
+  const byDay = new Map();
+  for (const row of data) {
+    byDay.set(row.date, (byDay.get(row.date) || 0) + (row.kcal || 0));
+  }
+  return [...byDay.entries()].map(([date, kcal]) => ({ date, kcal }));
+}
+
 export async function addFoodEntry(entry) {
   const { data, error } = await supabase
     .from('food_entries')

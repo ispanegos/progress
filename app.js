@@ -5,7 +5,7 @@ import {
   supabase, getSession, onAuthChange, signIn, signUp, signOut,
   fetchSettings, saveSettings,
   fetchWeightLogs, addWeightLog, deleteWeightLog,
-  fetchFoodEntries, addFoodEntry, deleteFoodEntry,
+  fetchFoodEntries, fetchAllFoodEntriesByDay, addFoodEntry, deleteFoodEntry,
   fetchActivityEntries, fetchAllActivityKcal, addActivityEntry, deleteActivityEntry,
   today, formatDateIT, fmtNum, el, openModal, closeModal, setupModalClose,
 } from './core.js';
@@ -114,12 +114,13 @@ async function renderApp() {
 
 async function loadAllData() {
   const todayStr = today();
-  const [settings, weightLogs, foodEntries, activityEntries, allActivityKcal] = await Promise.all([
+  const [settings, weightLogs, foodEntries, activityEntries, allActivityKcal, allFoodByDay] = await Promise.all([
     fetchSettings(),
     fetchWeightLogs(),
     fetchFoodEntries(todayStr),
     fetchActivityEntries(todayStr),
     fetchAllActivityKcal(),
+    fetchAllFoodEntriesByDay(),
   ]);
   state.settings = settings;
   state.weightLogs = weightLogs;
@@ -127,6 +128,9 @@ async function loadAllData() {
   state.activityEntries = activityEntries;
   state.allActivityKcal = allActivityKcal;
   state.todayActivityKcal = activityEntries.reduce((s, r) => s + (r.kcal || 0), 0);
+
+  const bmr = settings?.bmr ?? null;
+  state.totalFoodDeficit = bmr ? allFoodByDay.reduce((sum, d) => sum + (bmr - d.kcal), 0) : null;
 }
 
 async function refresh() {
@@ -140,13 +144,15 @@ function paintApp() {
   const firstWeight = w.length ? w[0].value : null;
   const weightGoal = state.settings?.weight_goal ?? null;
 
-  const kcalToGoal = firstWeight && weightGoal ? Math.max(0, (firstWeight - weightGoal) * 7800) : null;
+  const kcalToGoal = firstWeight && weightGoal ? Math.max(0, (firstWeight - weightGoal) * 7700) : null;
   const progressPct = kcalToGoal ? Math.min(100, Math.round((state.allActivityKcal / kcalToGoal) * 100)) : 0;
 
   const bmr = state.settings?.bmr ?? null;
-  const dailyCalorieGoal = state.settings?.daily_calorie_goal ?? null;
-  const activityGoal = state.settings?.activity_goal ?? null;
-  const activityGoalPct = activityGoal ? Math.min(100, Math.round((state.todayActivityKcal / activityGoal) * 100)) : 0;
+  const todayFoodKcal = state.foodEntries.reduce((s, e) => s + (e.kcal || 0), 0);
+  const todayFoodDeficit = bmr ? bmr - todayFoodKcal : null;
+  const totalFoodDeficit = state.totalFoodDeficit;
+  const combinedDeficit = (bmr && totalFoodDeficit !== null) ? state.allActivityKcal + totalFoodDeficit : null;
+  const estimatedKgLost = combinedDeficit !== null ? combinedDeficit / 7700 : null;
 
   const foodTotals = state.foodEntries.reduce((acc, e) => {
     acc.kcal += e.kcal || 0;
@@ -166,27 +172,27 @@ function paintApp() {
       </div>
     </div>
 
-    <!-- ═══ CALORIE BRUCIATE ═══ -->
+    <!-- ═══ DEFICIT CALORICO ═══ -->
     <div class="card-dark mb-12">
-      <div class="card-title">🔥 Calorie bruciate</div>
-      <div class="grid-2 mt-8" style="margin-bottom:0">
+      <div class="card-title">📉 Deficit calorico</div>
+      <div class="grid-2 mt-8">
         <div>
-          <div class="text-sm text-gray">Oggi</div>
-          <div class="medium-number text-white">${fmtNum(state.todayActivityKcal)}<span class="text-sm text-gray"> kcal</span></div>
+          <div class="text-sm text-gray">Bruciate con l'allenamento</div>
+          <div class="medium-number text-white">${fmtNum(state.allActivityKcal)}<span class="text-sm text-gray"> kcal</span></div>
         </div>
         <div>
-          <div class="text-sm text-gray">Totali di sempre</div>
-          <div class="medium-number text-lime">${fmtNum(state.allActivityKcal)}<span class="text-sm text-gray"> kcal</span></div>
+          <div class="text-sm text-gray">Deficit da alimentazione</div>
+          <div class="medium-number text-white">${totalFoodDeficit !== null ? fmtNum(totalFoodDeficit) : '—'}<span class="text-sm text-gray"> kcal</span></div>
         </div>
       </div>
-      ${activityGoal ? `
-        <div class="mt-16">
-          <div class="flex-between text-sm text-gray">
-            <span>Obiettivo attività oggi</span><span>${fmtNum(state.todayActivityKcal)} / ${fmtNum(activityGoal)} kcal</span>
-          </div>
-          <div class="progress-wrap"><div class="progress-bar" style="width:${activityGoalPct}%"></div></div>
+      ${estimatedKgLost !== null ? `
+        <div class="mt-16" style="border-top:1px solid var(--black3);padding-top:14px">
+          <div class="text-sm text-gray">Stima kg persi (7700 kcal/kg)</div>
+          <div class="big-number text-lime">${estimatedKgLost >= 0 ? fmtNum(estimatedKgLost, 1) : '0'}<span class="text-sm text-gray"> kg</span></div>
         </div>
-      ` : ''}
+      ` : `
+        <div class="mt-16 text-sm text-gray">Imposta il metabolismo basale (⚙️ in alto) per vedere il deficit da alimentazione e la stima dei kg persi.</div>
+      `}
     </div>
 
     <!-- ═══ PESO ═══ -->
@@ -216,7 +222,6 @@ function paintApp() {
           <div class="progress-wrap"><div class="progress-bar" style="width:${progressPct}%"></div></div>
         </div>
       ` : ''}
-      ${bmr ? `<div class="mt-12 text-sm text-gray">🔬 Metabolismo basale: <span class="text-white fw-bold">${fmtNum(bmr)} kcal/giorno</span></div>` : ''}
     </div>
 
     <!-- ═══ ALIMENTAZIONE ═══ -->
@@ -243,14 +248,18 @@ function paintApp() {
           <div style="font-size:18px;font-weight:800;color:var(--white)">${fmtNum(foodTotals.fat)}g</div>
         </div>
       </div>
-      ${dailyCalorieGoal ? `
-        <div class="mb-12">
-          <div class="flex-between text-sm text-gray">
-            <span>Obiettivo giornaliero</span><span>${fmtNum(foodTotals.kcal)} / ${fmtNum(dailyCalorieGoal)} kcal</span>
+      ${bmr ? `
+        <div class="mb-12" style="display:flex;gap:20px">
+          <div>
+            <div class="text-sm text-gray">Metabolismo basale</div>
+            <div style="font-size:16px;font-weight:800;color:var(--white)">${fmtNum(bmr)} kcal</div>
           </div>
-          <div class="progress-wrap"><div class="progress-bar" style="width:${Math.min(100, Math.round(foodTotals.kcal / dailyCalorieGoal * 100))}%"></div></div>
+          <div>
+            <div class="text-sm text-gray">Deficit di oggi</div>
+            <div style="font-size:16px;font-weight:800;color:${todayFoodDeficit >= 0 ? 'var(--lime)' : 'var(--red)'}">${todayFoodDeficit >= 0 ? '+' : ''}${fmtNum(todayFoodDeficit)} kcal</div>
+          </div>
         </div>
-      ` : ''}
+      ` : `<div class="mb-12 text-sm text-gray">Imposta il metabolismo basale (⚙️ in alto) per vedere il deficit di oggi.</div>`}
       <div id="food-list">
         ${state.foodEntries.length === 0
           ? `<div class="empty-state">Nessun alimento loggato oggi.</div>`
@@ -272,6 +281,10 @@ function paintApp() {
       <div class="flex-between mb-12">
         <div class="card-title" style="margin-bottom:0">🏃 Attività oggi</div>
         <button class="btn btn-lime btn-sm" id="add-activity-btn">+ Aggiungi</button>
+      </div>
+      <div class="mb-12">
+        <div class="text-sm text-gray">Totale calorie oggi</div>
+        <div style="font-size:22px;font-weight:800;color:var(--lime)">${fmtNum(state.todayActivityKcal)} kcal</div>
       </div>
       <div id="activity-list">
         ${state.activityEntries.length === 0
@@ -354,14 +367,6 @@ function modalsHtml() {
           <label class="form-label">Peso obiettivo (kg)</label>
           <input type="number" step="0.1" class="form-input" id="set-weight-goal" value="${state.settings?.weight_goal ?? ''}" placeholder="es. 90">
         </div>
-        <div class="form-group">
-          <label class="form-label">Obiettivo calorico giornaliero (kcal)</label>
-          <input type="number" class="form-input" id="set-calorie-goal" value="${state.settings?.daily_calorie_goal ?? ''}" placeholder="es. 2000">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Obiettivo attività (kcal bruciati/giorno)</label>
-          <input type="number" class="form-input" id="set-activity-goal" value="${state.settings?.activity_goal ?? ''}" placeholder="es. 400">
-        </div>
 
         <div style="border-top:1px solid var(--black3);margin:20px 0 16px;padding-top:16px">
           <div class="card-title" style="margin-bottom:12px">🔬 Metabolismo Basale</div>
@@ -382,7 +387,11 @@ function modalsHtml() {
             <label class="form-label">Altezza (cm)</label>
             <input type="number" class="form-input" id="set-height" value="${state.settings?.height ?? ''}" placeholder="es. 186">
           </div>
-          <button class="btn btn-ghost btn-sm w-full" id="calc-bmr-btn">Calcola dal peso attuale</button>
+          <div class="form-group">
+            <label class="form-label">Peso attuale (kg)</label>
+            <input type="number" step="0.1" class="form-input" id="set-bmr-weight" value="${w.length ? w[w.length - 1].value : ''}" placeholder="es. 95">
+          </div>
+          <button class="btn btn-ghost btn-sm w-full" id="calc-bmr-btn">Calcola</button>
           <div class="form-group mt-16">
             <label class="form-label">Metabolismo basale (kcal/giorno)</label>
             <input type="number" class="form-input" id="set-bmr" value="${state.settings?.bmr ?? ''}" placeholder="es. 1850">
@@ -547,12 +556,12 @@ function wireEvents() {
     const gender = el('set-gender').value;
     const age = parseFloat(el('set-age').value);
     const height = parseFloat(el('set-height').value);
-    const lastWeight = state.weightLogs.length ? state.weightLogs[state.weightLogs.length - 1].value : null;
-    if (!age || !height || !lastWeight) {
-      alert('Compila età, altezza e registra almeno un peso per calcolare il BMR.');
+    const weight = parseFloat(el('set-bmr-weight').value);
+    if (!age || !height || !weight) {
+      alert('Compila età, altezza e peso attuale per calcolare il BMR.');
       return;
     }
-    const base = 10 * lastWeight + 6.25 * height - 5 * age;
+    const base = 10 * weight + 6.25 * height - 5 * age;
     const bmr = Math.round(gender === 'M' ? base + 5 : base - 161);
     el('set-bmr').value = bmr;
   };
@@ -560,8 +569,6 @@ function wireEvents() {
   el('save-settings-btn').onclick = async () => {
     const patch = {
       weight_goal: parseFloat(el('set-weight-goal').value) || null,
-      daily_calorie_goal: parseFloat(el('set-calorie-goal').value) || null,
-      activity_goal: parseFloat(el('set-activity-goal').value) || null,
       gender: el('set-gender').value,
       age: parseInt(el('set-age').value) || null,
       height: parseFloat(el('set-height').value) || null,
