@@ -83,6 +83,20 @@ body {
 
 .brand .brand-dot { color: var(--lime); }
 
+.icon-btn {
+  background: var(--black);
+  color: var(--white);
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 99px;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .logout-btn {
   background: var(--black);
   color: var(--gray2);

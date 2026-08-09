@@ -143,6 +143,11 @@ function paintApp() {
   const kcalToGoal = firstWeight && weightGoal ? Math.max(0, (firstWeight - weightGoal) * 7800) : null;
   const progressPct = kcalToGoal ? Math.min(100, Math.round((state.allActivityKcal / kcalToGoal) * 100)) : 0;
 
+  const bmr = state.settings?.bmr ?? null;
+  const dailyCalorieGoal = state.settings?.daily_calorie_goal ?? null;
+  const activityGoal = state.settings?.activity_goal ?? null;
+  const activityGoalPct = activityGoal ? Math.min(100, Math.round((state.todayActivityKcal / activityGoal) * 100)) : 0;
+
   const foodTotals = state.foodEntries.reduce((acc, e) => {
     acc.kcal += e.kcal || 0;
     acc.protein += e.protein || 0;
@@ -155,7 +160,10 @@ function paintApp() {
   root.innerHTML = `
     <div class="top-header">
       <div class="brand">PROGRESS<span class="brand-dot">.</span></div>
-      <button class="logout-btn" id="logout-btn">Esci</button>
+      <div class="flex gap-8">
+        <button class="icon-btn" id="settings-btn" title="Impostazioni">⚙️</button>
+        <button class="logout-btn" id="logout-btn">Esci</button>
+      </div>
     </div>
 
     <!-- ═══ CALORIE BRUCIATE ═══ -->
@@ -171,16 +179,21 @@ function paintApp() {
           <div class="medium-number text-lime">${fmtNum(state.allActivityKcal)}<span class="text-sm text-gray"> kcal</span></div>
         </div>
       </div>
+      ${activityGoal ? `
+        <div class="mt-16">
+          <div class="flex-between text-sm text-gray">
+            <span>Obiettivo attività oggi</span><span>${fmtNum(state.todayActivityKcal)} / ${fmtNum(activityGoal)} kcal</span>
+          </div>
+          <div class="progress-wrap"><div class="progress-bar" style="width:${activityGoalPct}%"></div></div>
+        </div>
+      ` : ''}
     </div>
 
     <!-- ═══ PESO ═══ -->
     <div class="card-dark mb-12">
       <div class="flex-between mb-12">
         <div class="card-title" style="margin-bottom:0">⚖️ Peso</div>
-        <div class="flex gap-8">
-          <button class="btn btn-ghost btn-sm" id="edit-goal-btn">🎯 Obiettivo</button>
-          <button class="btn btn-lime btn-sm" id="add-weight-btn">+ Log</button>
-        </div>
+        <button class="btn btn-lime btn-sm" id="add-weight-btn">+ Log</button>
       </div>
       <div style="display:flex;gap:16px;align-items:flex-end;margin-bottom:16px">
         <div>
@@ -203,6 +216,7 @@ function paintApp() {
           <div class="progress-wrap"><div class="progress-bar" style="width:${progressPct}%"></div></div>
         </div>
       ` : ''}
+      ${bmr ? `<div class="mt-12 text-sm text-gray">🔬 Metabolismo basale: <span class="text-white fw-bold">${fmtNum(bmr)} kcal/giorno</span></div>` : ''}
     </div>
 
     <!-- ═══ ALIMENTAZIONE ═══ -->
@@ -229,6 +243,14 @@ function paintApp() {
           <div style="font-size:18px;font-weight:800;color:var(--white)">${fmtNum(foodTotals.fat)}g</div>
         </div>
       </div>
+      ${dailyCalorieGoal ? `
+        <div class="mb-12">
+          <div class="flex-between text-sm text-gray">
+            <span>Obiettivo giornaliero</span><span>${fmtNum(foodTotals.kcal)} / ${fmtNum(dailyCalorieGoal)} kcal</span>
+          </div>
+          <div class="progress-wrap"><div class="progress-bar" style="width:${Math.min(100, Math.round(foodTotals.kcal / dailyCalorieGoal * 100))}%"></div></div>
+        </div>
+      ` : ''}
       <div id="food-list">
         ${state.foodEntries.length === 0
           ? `<div class="empty-state">Nessun alimento loggato oggi.</div>`
@@ -322,16 +344,53 @@ function modalsHtml() {
       </div>
     </div>
 
-    <!-- Obiettivo -->
-    <div class="modal-overlay" id="modal-goal">
+    <!-- Impostazioni -->
+    <div class="modal-overlay" id="modal-settings">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div class="modal-title">Obiettivo peso</div>
+        <div class="modal-title">Impostazioni</div>
+
         <div class="form-group">
           <label class="form-label">Peso obiettivo (kg)</label>
-          <input type="number" step="0.1" class="form-input" id="goal-value" value="${state.settings?.weight_goal ?? ''}" placeholder="es. 90">
+          <input type="number" step="0.1" class="form-input" id="set-weight-goal" value="${state.settings?.weight_goal ?? ''}" placeholder="es. 90">
         </div>
-        <button class="btn btn-lime btn-block" id="save-goal-btn">Salva</button>
+        <div class="form-group">
+          <label class="form-label">Obiettivo calorico giornaliero (kcal)</label>
+          <input type="number" class="form-input" id="set-calorie-goal" value="${state.settings?.daily_calorie_goal ?? ''}" placeholder="es. 2000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Obiettivo attività (kcal bruciati/giorno)</label>
+          <input type="number" class="form-input" id="set-activity-goal" value="${state.settings?.activity_goal ?? ''}" placeholder="es. 400">
+        </div>
+
+        <div style="border-top:1px solid var(--black3);margin:20px 0 16px;padding-top:16px">
+          <div class="card-title" style="margin-bottom:12px">🔬 Metabolismo Basale</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Sesso</label>
+              <select class="form-input" id="set-gender">
+                <option value="M" ${state.settings?.gender === 'M' ? 'selected' : ''}>Uomo</option>
+                <option value="F" ${state.settings?.gender === 'F' ? 'selected' : ''}>Donna</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Età</label>
+              <input type="number" class="form-input" id="set-age" value="${state.settings?.age ?? ''}" placeholder="es. 32">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Altezza (cm)</label>
+            <input type="number" class="form-input" id="set-height" value="${state.settings?.height ?? ''}" placeholder="es. 186">
+          </div>
+          <button class="btn btn-ghost btn-sm w-full" id="calc-bmr-btn">Calcola dal peso attuale</button>
+          <div class="form-group mt-16">
+            <label class="form-label">Metabolismo basale (kcal/giorno)</label>
+            <input type="number" class="form-input" id="set-bmr" value="${state.settings?.bmr ?? ''}" placeholder="es. 1850">
+          </div>
+          <div class="text-sm text-gray">Formula Mifflin-St Jeor, senza moltiplicatore di attività.</div>
+        </div>
+
+        <button class="btn btn-lime btn-block" id="save-settings-btn">Salva</button>
       </div>
     </div>
 
@@ -468,9 +527,9 @@ function wireEvents() {
 
   // Weight
   el('add-weight-btn').onclick = () => openModal('modal-weight');
-  el('edit-goal-btn').onclick = () => openModal('modal-goal');
+  el('settings-btn').onclick = () => openModal('modal-settings');
   setupModalClose('modal-weight');
-  setupModalClose('modal-goal');
+  setupModalClose('modal-settings');
   setupModalClose('modal-food');
   setupModalClose('modal-activity');
 
@@ -483,11 +542,33 @@ function wireEvents() {
     await refresh();
   };
 
-  el('save-goal-btn').onclick = async () => {
-    const value = parseFloat(el('goal-value').value);
-    if (!value) return;
-    await saveSettings({ weight_goal: value });
-    closeModal('modal-goal');
+  // Settings
+  el('calc-bmr-btn').onclick = () => {
+    const gender = el('set-gender').value;
+    const age = parseFloat(el('set-age').value);
+    const height = parseFloat(el('set-height').value);
+    const lastWeight = state.weightLogs.length ? state.weightLogs[state.weightLogs.length - 1].value : null;
+    if (!age || !height || !lastWeight) {
+      alert('Compila età, altezza e registra almeno un peso per calcolare il BMR.');
+      return;
+    }
+    const base = 10 * lastWeight + 6.25 * height - 5 * age;
+    const bmr = Math.round(gender === 'M' ? base + 5 : base - 161);
+    el('set-bmr').value = bmr;
+  };
+
+  el('save-settings-btn').onclick = async () => {
+    const patch = {
+      weight_goal: parseFloat(el('set-weight-goal').value) || null,
+      daily_calorie_goal: parseFloat(el('set-calorie-goal').value) || null,
+      activity_goal: parseFloat(el('set-activity-goal').value) || null,
+      gender: el('set-gender').value,
+      age: parseInt(el('set-age').value) || null,
+      height: parseFloat(el('set-height').value) || null,
+      bmr: parseFloat(el('set-bmr').value) || null,
+    };
+    await saveSettings(patch);
+    closeModal('modal-settings');
     await refresh();
   };
 
