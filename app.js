@@ -389,7 +389,7 @@ function modalsHtml() {
           </div>
           <div class="form-group">
             <label class="form-label">Peso attuale (kg)</label>
-            <input type="number" step="0.1" class="form-input" id="set-bmr-weight" value="${w.length ? w[w.length - 1].value : ''}" placeholder="es. 95">
+            <input type="number" step="0.1" class="form-input" id="set-bmr-weight" value="${state.weightLogs.length ? state.weightLogs[state.weightLogs.length - 1].value : ''}" placeholder="es. 95">
           </div>
           <button class="btn btn-ghost btn-sm w-full" id="calc-bmr-btn">Calcola</button>
           <div class="form-group mt-16">
