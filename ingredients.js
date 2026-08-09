@@ -14,6 +14,8 @@ const DEFAULT_ING_CATEGORIES = [
   { id: 'cat09', name: 'Condimenti & Salse',    emoji: '🫙' },
   { id: 'cat10', name: 'Dolci & Cacao',         emoji: '🍫' },
   { id: 'cat11', name: 'Bevande',               emoji: '☕' },
+  { id: 'cat12', name: 'Altro',                 emoji: '🌿' },
+];
 
 export const ING_CATEGORIES = DEFAULT_ING_CATEGORIES;
 
