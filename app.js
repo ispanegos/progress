@@ -2,25 +2,21 @@
 // PROGRESS — App
 // ============================================================
 import {
-  supabase, getSession, onAuthChange, signIn, signUp, signOut,
+  getSession, onAuthChange, signIn, signUp, signOut,
   fetchSettings, saveSettings,
-  fetchWeightLogs, addWeightLog, deleteWeightLog,
-  fetchFoodEntries, fetchAllFoodEntriesByDay, addFoodEntry, deleteFoodEntry,
+  fetchWeightLogs, addWeightLog,
   fetchActivityEntries, fetchAllActivityKcal, addActivityEntry, deleteActivityEntry,
-  today, formatDateIT, fmtNum, el, openModal, closeModal, setupModalClose,
+  today, fmtNum, el, openModal, closeModal, setupModalClose,
 } from './core.js';
-import { ING_CATEGORIES, INGREDIENTS } from './ingredients.js';
 
 const root = el('app-root');
 
 let state = {
   settings: null,
   weightLogs: [],
-  foodEntries: [],
   activityEntries: [],
   allActivityKcal: 0,
   todayActivityKcal: 0,
-  selectedIngredient: null,
 };
 
 // ── Boot ─────────────────────────────────────────────────────
@@ -114,23 +110,17 @@ async function renderApp() {
 
 async function loadAllData() {
   const todayStr = today();
-  const [settings, weightLogs, foodEntries, activityEntries, allActivityKcal, allFoodByDay] = await Promise.all([
+  const [settings, weightLogs, activityEntries, allActivityKcal] = await Promise.all([
     fetchSettings(),
     fetchWeightLogs(),
-    fetchFoodEntries(todayStr),
     fetchActivityEntries(todayStr),
     fetchAllActivityKcal(),
-    fetchAllFoodEntriesByDay(),
   ]);
   state.settings = settings;
   state.weightLogs = weightLogs;
-  state.foodEntries = foodEntries;
   state.activityEntries = activityEntries;
   state.allActivityKcal = allActivityKcal;
   state.todayActivityKcal = activityEntries.reduce((s, r) => s + (r.kcal || 0), 0);
-
-  const bmr = settings?.bmr ?? null;
-  state.totalFoodDeficit = bmr ? allFoodByDay.reduce((sum, d) => sum + (bmr - d.kcal), 0) : null;
 }
 
 async function refresh() {
@@ -147,21 +137,7 @@ function paintApp() {
   const kcalToGoal = firstWeight && weightGoal ? Math.max(0, (firstWeight - weightGoal) * 7700) : null;
   const progressPct = kcalToGoal ? Math.min(100, Math.round((state.allActivityKcal / kcalToGoal) * 100)) : 0;
 
-  const bmr = state.settings?.bmr ?? null;
-  const todayFoodKcal = state.foodEntries.reduce((s, e) => s + (e.kcal || 0), 0);
-  const todayFoodDeficit = bmr ? bmr - todayFoodKcal : null;
-  const totalFoodDeficit = state.totalFoodDeficit;
-  const combinedDeficit = (bmr && totalFoodDeficit !== null) ? state.allActivityKcal + totalFoodDeficit : null;
-  const estimatedKgLost = combinedDeficit !== null ? combinedDeficit / 7700 : null;
-
-  const foodTotals = state.foodEntries.reduce((acc, e) => {
-    acc.kcal += e.kcal || 0;
-    acc.protein += e.protein || 0;
-    acc.carbs += e.carbs || 0;
-    acc.fat += e.fat || 0;
-    acc.fiber += e.fiber || 0;
-    return acc;
-  }, { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+  const estimatedKgLost = state.allActivityKcal / 7700;
 
   root.innerHTML = `
     <div class="top-header">
@@ -170,29 +146,6 @@ function paintApp() {
         <button class="icon-btn" id="settings-btn" title="Impostazioni">⚙️</button>
         <button class="logout-btn" id="logout-btn">Esci</button>
       </div>
-    </div>
-
-    <!-- ═══ DEFICIT CALORICO ═══ -->
-    <div class="card-dark mb-12">
-      <div class="card-title">📉 Deficit calorico</div>
-      <div class="grid-2 mt-8">
-        <div>
-          <div class="text-sm text-gray">Bruciate con l'allenamento</div>
-          <div class="medium-number text-white">${fmtNum(state.allActivityKcal)}<span class="text-sm text-gray"> kcal</span></div>
-        </div>
-        <div>
-          <div class="text-sm text-gray">Deficit da alimentazione</div>
-          <div class="medium-number text-white">${totalFoodDeficit !== null ? fmtNum(totalFoodDeficit) : '—'}<span class="text-sm text-gray"> kcal</span></div>
-        </div>
-      </div>
-      ${estimatedKgLost !== null ? `
-        <div class="mt-16" style="border-top:1px solid var(--black3);padding-top:14px">
-          <div class="text-sm text-gray">Stima kg persi (7700 kcal/kg)</div>
-          <div class="big-number text-lime">${estimatedKgLost >= 0 ? fmtNum(estimatedKgLost, 1) : '0'}<span class="text-sm text-gray"> kg</span></div>
-        </div>
-      ` : `
-        <div class="mt-16 text-sm text-gray">Imposta il metabolismo basale (⚙️ in alto) per vedere il deficit da alimentazione e la stima dei kg persi.</div>
-      `}
     </div>
 
     <!-- ═══ PESO ═══ -->
@@ -224,68 +177,29 @@ function paintApp() {
       ` : ''}
     </div>
 
-    <!-- ═══ ALIMENTAZIONE ═══ -->
-    <div class="card-dark mb-12">
-      <div class="flex-between mb-12">
-        <div class="card-title" style="margin-bottom:0">🍽️ Alimentazione oggi</div>
-        <button class="btn btn-lime btn-sm" id="add-food-btn">+ Aggiungi</button>
-      </div>
-      <div class="grid-4 mb-12">
-        <div>
-          <div class="text-sm text-gray">Kcal</div>
-          <div style="font-size:18px;font-weight:800;color:var(--white)">${fmtNum(foodTotals.kcal)}</div>
-        </div>
-        <div>
-          <div class="text-sm text-gray">Prot.</div>
-          <div style="font-size:18px;font-weight:800;color:var(--white)">${fmtNum(foodTotals.protein)}g</div>
-        </div>
-        <div>
-          <div class="text-sm text-gray">Carb.</div>
-          <div style="font-size:18px;font-weight:800;color:var(--white)">${fmtNum(foodTotals.carbs)}g</div>
-        </div>
-        <div>
-          <div class="text-sm text-gray">Grassi</div>
-          <div style="font-size:18px;font-weight:800;color:var(--white)">${fmtNum(foodTotals.fat)}g</div>
-        </div>
-      </div>
-      ${bmr ? `
-        <div class="mb-12" style="display:flex;gap:20px">
-          <div>
-            <div class="text-sm text-gray">Metabolismo basale</div>
-            <div style="font-size:16px;font-weight:800;color:var(--white)">${fmtNum(bmr)} kcal</div>
-          </div>
-          <div>
-            <div class="text-sm text-gray">Deficit di oggi</div>
-            <div style="font-size:16px;font-weight:800;color:${todayFoodDeficit >= 0 ? 'var(--lime)' : 'var(--red)'}">${todayFoodDeficit >= 0 ? '+' : ''}${fmtNum(todayFoodDeficit)} kcal</div>
-          </div>
-        </div>
-      ` : `<div class="mb-12 text-sm text-gray">Imposta il metabolismo basale (⚙️ in alto) per vedere il deficit di oggi.</div>`}
-      <div id="food-list">
-        ${state.foodEntries.length === 0
-          ? `<div class="empty-state">Nessun alimento loggato oggi.</div>`
-          : state.foodEntries.map(e => `
-            <div class="list-item">
-              <div class="list-info">
-                <div class="list-name">${escapeHtml(e.name)}</div>
-                <div class="list-sub">${e.grams ? fmtNum(e.grams) + ' g · ' : ''}${fmtNum(e.protein)}P ${fmtNum(e.carbs)}C ${fmtNum(e.fat)}G</div>
-              </div>
-              <div class="list-value">${fmtNum(e.kcal)} kcal</div>
-              <button class="del-btn" data-del-food="${e.id}">🗑️</button>
-            </div>
-          `).join('')}
-      </div>
-    </div>
-
     <!-- ═══ ATTIVITÀ ═══ -->
     <div class="card-dark mb-12">
       <div class="flex-between mb-12">
-        <div class="card-title" style="margin-bottom:0">🏃 Attività oggi</div>
+        <div class="card-title" style="margin-bottom:0">🏃 Attività</div>
         <button class="btn btn-lime btn-sm" id="add-activity-btn">+ Aggiungi</button>
       </div>
-      <div class="mb-12">
-        <div class="text-sm text-gray">Totale calorie oggi</div>
-        <div style="font-size:22px;font-weight:800;color:var(--lime)">${fmtNum(state.todayActivityKcal)} kcal</div>
+
+      <div class="grid-2 mb-12">
+        <div>
+          <div class="text-sm text-gray">Oggi</div>
+          <div class="medium-number text-white">${fmtNum(state.todayActivityKcal)}<span class="text-sm text-gray"> kcal</span></div>
+        </div>
+        <div>
+          <div class="text-sm text-gray">Totale di sempre</div>
+          <div class="medium-number text-lime">${fmtNum(state.allActivityKcal)}<span class="text-sm text-gray"> kcal</span></div>
+        </div>
       </div>
+
+      <div class="mb-12" style="border-top:1px solid var(--black3);padding-top:14px">
+        <div class="text-sm text-gray">Stima kg persi (7700 kcal/kg)</div>
+        <div class="big-number text-lime">${fmtNum(estimatedKgLost, 1)}<span class="text-sm text-gray"> kg</span></div>
+      </div>
+
       <div id="activity-list">
         ${state.activityEntries.length === 0
           ? `<div class="empty-state">Nessuna attività loggata oggi.</div>`
@@ -362,98 +276,11 @@ function modalsHtml() {
       <div class="modal-sheet">
         <div class="modal-handle"></div>
         <div class="modal-title">Impostazioni</div>
-
         <div class="form-group">
           <label class="form-label">Peso obiettivo (kg)</label>
           <input type="number" step="0.1" class="form-input" id="set-weight-goal" value="${state.settings?.weight_goal ?? ''}" placeholder="es. 90">
         </div>
-
-        <div style="border-top:1px solid var(--black3);margin:20px 0 16px;padding-top:16px">
-          <div class="card-title" style="margin-bottom:12px">🔬 Metabolismo Basale</div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Sesso</label>
-              <select class="form-input" id="set-gender">
-                <option value="M" ${state.settings?.gender === 'M' ? 'selected' : ''}>Uomo</option>
-                <option value="F" ${state.settings?.gender === 'F' ? 'selected' : ''}>Donna</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Età</label>
-              <input type="number" class="form-input" id="set-age" value="${state.settings?.age ?? ''}" placeholder="es. 32">
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Altezza (cm)</label>
-            <input type="number" class="form-input" id="set-height" value="${state.settings?.height ?? ''}" placeholder="es. 186">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Peso attuale (kg)</label>
-            <input type="number" step="0.1" class="form-input" id="set-bmr-weight" value="${state.weightLogs.length ? state.weightLogs[state.weightLogs.length - 1].value : ''}" placeholder="es. 95">
-          </div>
-          <button class="btn btn-ghost btn-sm w-full" id="calc-bmr-btn">Calcola</button>
-          <div class="form-group mt-16">
-            <label class="form-label">Metabolismo basale (kcal/giorno)</label>
-            <input type="number" class="form-input" id="set-bmr" value="${state.settings?.bmr ?? ''}" placeholder="es. 1850">
-          </div>
-          <div class="text-sm text-gray">Formula Mifflin-St Jeor, senza moltiplicatore di attività.</div>
-        </div>
-
         <button class="btn btn-lime btn-block" id="save-settings-btn">Salva</button>
-      </div>
-    </div>
-
-    <!-- Alimentazione -->
-    <div class="modal-overlay" id="modal-food">
-      <div class="modal-sheet">
-        <div class="modal-handle"></div>
-        <div class="modal-title">Aggiungi alimento</div>
-
-        <div class="auth-tabs">
-          <button class="auth-tab active" id="food-tab-lib">Dal database</button>
-          <button class="auth-tab" id="food-tab-manual">Manuale</button>
-        </div>
-
-        <div id="food-lib-panel">
-          <div class="search-box">
-            <input type="text" class="form-input" id="ing-search" placeholder="Cerca alimento...">
-          </div>
-          <div id="ing-categories"></div>
-          <div class="form-group mt-16" id="ing-grams-group" style="display:none">
-            <label class="form-label">Grammi</label>
-            <input type="number" class="form-input" id="ing-grams" placeholder="es. 100">
-            <div id="ing-preview" class="text-sm text-gray mt-8"></div>
-          </div>
-        </div>
-
-        <div id="food-manual-panel" style="display:none">
-          <div class="form-group">
-            <label class="form-label">Nome</label>
-            <input type="text" class="form-input" id="manual-name" placeholder="es. Pizza margherita">
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Kcal</label>
-              <input type="number" class="form-input" id="manual-kcal" placeholder="0">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Proteine (g)</label>
-              <input type="number" class="form-input" id="manual-protein" placeholder="0">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Carboidrati (g)</label>
-              <input type="number" class="form-input" id="manual-carbs" placeholder="0">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Grassi (g)</label>
-              <input type="number" class="form-input" id="manual-fat" placeholder="0">
-            </div>
-          </div>
-        </div>
-
-        <button class="btn btn-lime btn-block mt-8" id="save-food-btn">Aggiungi</button>
       </div>
     </div>
 
@@ -476,70 +303,15 @@ function modalsHtml() {
   `;
 }
 
-function renderIngredientCategories(filter = '') {
-  const f = filter.trim().toLowerCase();
-  const box = el('ing-categories');
-  if (!box) return;
-  const cats = ING_CATEGORIES.map(cat => {
-    const items = INGREDIENTS.filter(i => i.categoryId === cat.id && (!f || i.name.toLowerCase().includes(f)));
-    if (items.length === 0) return '';
-    return `
-      <div class="ing-cat ${f ? 'open' : ''}" data-cat="${cat.id}">
-        <div class="ing-cat-header" data-toggle-cat="${cat.id}">
-          <span>${cat.emoji} ${cat.name}</span>
-          <span class="ing-cat-chevron">▾</span>
-        </div>
-        <div class="ing-cat-body">
-          ${items.map(i => `
-            <div class="ing-row" data-ing="${i.id}">
-              <span class="ing-row-name">${escapeHtml(i.name)}</span>
-              <span class="ing-row-kcal">${i.kcalPer100} kcal/100g</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  }).join('');
-  box.innerHTML = cats || `<div class="empty-state">Nessun alimento trovato.</div>`;
-
-  box.querySelectorAll('[data-toggle-cat]').forEach(headerEl => {
-    headerEl.onclick = () => headerEl.closest('.ing-cat').classList.toggle('open');
-  });
-  box.querySelectorAll('[data-ing]').forEach(rowEl => {
-    rowEl.onclick = () => {
-      const ing = INGREDIENTS.find(i => i.id === rowEl.dataset.ing);
-      state.selectedIngredient = ing;
-      el('ing-grams-group').style.display = 'block';
-      el('ing-grams').value = '100';
-      updateIngPreview();
-      el('ing-grams').focus();
-    };
-  });
-}
-
-function updateIngPreview() {
-  const ing = state.selectedIngredient;
-  const grams = parseFloat(el('ing-grams')?.value) || 0;
-  const preview = el('ing-preview');
-  if (!ing || !preview) return;
-  const k = Math.round(ing.kcalPer100 * grams / 100);
-  const p = (ing.proteinPer100 * grams / 100).toFixed(1);
-  const c = (ing.carbsPer100 * grams / 100).toFixed(1);
-  const f = (ing.fatPer100 * grams / 100).toFixed(1);
-  preview.innerHTML = `<strong style="color:var(--lime)">${escapeHtml(ing.name)}</strong> — ${k} kcal · ${p}P ${c}C ${f}G`;
-}
-
 // ── Events ───────────────────────────────────────────────────
 
 function wireEvents() {
   el('logout-btn').onclick = async () => { await signOut(); };
 
-  // Weight
   el('add-weight-btn').onclick = () => openModal('modal-weight');
   el('settings-btn').onclick = () => openModal('modal-settings');
   setupModalClose('modal-weight');
   setupModalClose('modal-settings');
-  setupModalClose('modal-food');
   setupModalClose('modal-activity');
 
   el('save-weight-btn').onclick = async () => {
@@ -551,98 +323,15 @@ function wireEvents() {
     await refresh();
   };
 
-  // Settings
-  el('calc-bmr-btn').onclick = () => {
-    const gender = el('set-gender').value;
-    const age = parseFloat(el('set-age').value);
-    const height = parseFloat(el('set-height').value);
-    const weight = parseFloat(el('set-bmr-weight').value);
-    if (!age || !height || !weight) {
-      alert('Compila età, altezza e peso attuale per calcolare il BMR.');
-      return;
-    }
-    const base = 10 * weight + 6.25 * height - 5 * age;
-    const bmr = Math.round(gender === 'M' ? base + 5 : base - 161);
-    el('set-bmr').value = bmr;
-  };
-
   el('save-settings-btn').onclick = async () => {
     const patch = {
       weight_goal: parseFloat(el('set-weight-goal').value) || null,
-      gender: el('set-gender').value,
-      age: parseInt(el('set-age').value) || null,
-      height: parseFloat(el('set-height').value) || null,
-      bmr: parseFloat(el('set-bmr').value) || null,
     };
     await saveSettings(patch);
     closeModal('modal-settings');
     await refresh();
   };
 
-  // Food
-  el('add-food-btn').onclick = () => {
-    state.selectedIngredient = null;
-    el('ing-grams-group').style.display = 'none';
-    el('ing-search').value = '';
-    renderIngredientCategories();
-    openModal('modal-food');
-  };
-
-  el('food-tab-lib').onclick = () => {
-    el('food-tab-lib').classList.add('active');
-    el('food-tab-manual').classList.remove('active');
-    el('food-lib-panel').style.display = 'block';
-    el('food-manual-panel').style.display = 'none';
-  };
-  el('food-tab-manual').onclick = () => {
-    el('food-tab-manual').classList.add('active');
-    el('food-tab-lib').classList.remove('active');
-    el('food-manual-panel').style.display = 'block';
-    el('food-lib-panel').style.display = 'none';
-  };
-
-  el('ing-search').oninput = (e) => renderIngredientCategories(e.target.value);
-  el('ing-grams').oninput = updateIngPreview;
-
-  el('save-food-btn').onclick = async () => {
-    const isManual = el('food-manual-panel').style.display !== 'none';
-    let entry = null;
-    if (isManual) {
-      const name = el('manual-name').value.trim();
-      const kcal = parseFloat(el('manual-kcal').value) || 0;
-      if (!name || !kcal) return;
-      entry = {
-        date: today(), name,
-        grams: null,
-        kcal,
-        protein: parseFloat(el('manual-protein').value) || 0,
-        carbs: parseFloat(el('manual-carbs').value) || 0,
-        fat: parseFloat(el('manual-fat').value) || 0,
-        fiber: 0,
-      };
-    } else {
-      const ing = state.selectedIngredient;
-      const grams = parseFloat(el('ing-grams').value);
-      if (!ing || !grams) return;
-      entry = {
-        date: today(), name: ing.name, grams,
-        kcal: Math.round(ing.kcalPer100 * grams / 100),
-        protein: +(ing.proteinPer100 * grams / 100).toFixed(1),
-        carbs: +(ing.carbsPer100 * grams / 100).toFixed(1),
-        fat: +(ing.fatPer100 * grams / 100).toFixed(1),
-        fiber: +(ing.fiberPer100 * grams / 100).toFixed(1),
-      };
-    }
-    await addFoodEntry(entry);
-    closeModal('modal-food');
-    await refresh();
-  };
-
-  root.querySelectorAll('[data-del-food]').forEach(btn => {
-    btn.onclick = async () => { await deleteFoodEntry(btn.dataset.delFood); await refresh(); };
-  });
-
-  // Activity
   el('add-activity-btn').onclick = () => {
     el('activity-name').value = '';
     el('activity-kcal').value = '';
