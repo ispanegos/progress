@@ -4,9 +4,9 @@
 import {
   getSession, onAuthChange, signIn, signUp, signOut,
   fetchSettings, saveSettings,
-  fetchWeightLogs, addWeightLog,
-  fetchActivityEntries, fetchAllActivityKcal, addActivityEntry, deleteActivityEntry,
-  today, fmtNum, el, openModal, closeModal, setupModalClose,
+  fetchWeightLogs, addWeightLog, deleteWeightLog,
+  fetchAllActivityEntries, addActivityEntry, updateActivityEntry, deleteActivityEntry,
+  today, formatDateIT, fmtNum, el, openModal, closeModal, setupModalClose,
 } from './core.js';
 
 const root = el('app-root');
@@ -14,9 +14,10 @@ const root = el('app-root');
 let state = {
   settings: null,
   weightLogs: [],
-  activityEntries: [],
+  allActivityEntries: [],
   allActivityKcal: 0,
   todayActivityKcal: 0,
+  editingActivityId: null,
 };
 
 // ── Boot ─────────────────────────────────────────────────────
@@ -109,18 +110,20 @@ async function renderApp() {
 }
 
 async function loadAllData() {
-  const todayStr = today();
-  const [settings, weightLogs, activityEntries, allActivityKcal] = await Promise.all([
+  const [settings, weightLogs, allActivityEntries] = await Promise.all([
     fetchSettings(),
     fetchWeightLogs(),
-    fetchActivityEntries(todayStr),
-    fetchAllActivityKcal(),
+    fetchAllActivityEntries(),
   ]);
   state.settings = settings;
   state.weightLogs = weightLogs;
-  state.activityEntries = activityEntries;
-  state.allActivityKcal = allActivityKcal;
-  state.todayActivityKcal = activityEntries.reduce((s, r) => s + (r.kcal || 0), 0);
+  state.allActivityEntries = allActivityEntries;
+
+  const todayStr = today();
+  state.todayActivityKcal = allActivityEntries
+    .filter(e => e.date === todayStr)
+    .reduce((s, e) => s + (e.kcal || 0), 0);
+  state.allActivityKcal = allActivityEntries.reduce((s, e) => s + (e.kcal || 0), 0);
 }
 
 async function refresh() {
@@ -152,21 +155,26 @@ function paintApp() {
     <div class="card-dark mb-12">
       <div class="flex-between mb-12">
         <div class="card-title" style="margin-bottom:0">⚖️ Peso</div>
-        <button class="btn btn-lime btn-sm" id="add-weight-btn">+ Log</button>
+        <button class="btn btn-lime btn-sm" id="add-weight-btn">+ Aggiungi</button>
       </div>
-      <div style="display:flex;gap:16px;align-items:flex-end;margin-bottom:16px">
+
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:18px">
         <div>
-          <div class="text-sm text-gray">Attuale</div>
-          <div class="big-number text-white">${lastWeight ? fmtNum(lastWeight, 1) : '—'}<span class="text-sm text-gray"> kg</span></div>
+          <div class="text-sm text-gray">Iniziale</div>
+          <div style="font-size:20px;font-weight:800;color:var(--white)">${firstWeight ? fmtNum(firstWeight, 1) : '—'}<span class="text-sm text-gray"> kg</span></div>
         </div>
-        ${weightGoal ? `
-        <div style="margin-left:auto;text-align:right">
+        <div style="text-align:center">
+          <div class="text-sm text-gray">Attuale</div>
+          <div class="big-number text-lime">${lastWeight ? fmtNum(lastWeight, 1) : '—'}<span class="text-sm text-gray"> kg</span></div>
+        </div>
+        <div style="text-align:right">
           <div class="text-sm text-gray">Obiettivo</div>
-          <div style="font-size:22px;font-weight:800;color:var(--lime)">${fmtNum(weightGoal, 1)} kg</div>
-          ${lastWeight ? `<div class="text-sm" style="color:${lastWeight <= weightGoal ? 'var(--lime)' : 'var(--red)'}">${fmtNum(Math.abs(lastWeight - weightGoal), 1)} kg ${lastWeight > weightGoal ? 'ancora' : 'raggiunto 🎉'}</div>` : ''}
-        </div>` : ''}
+          <div style="font-size:20px;font-weight:800;color:var(--white)">${weightGoal ? fmtNum(weightGoal, 1) : '—'}<span class="text-sm text-gray"> kg</span></div>
+        </div>
       </div>
+
       ${renderWeightChart(w)}
+
       ${kcalToGoal ? `
         <div class="mt-16">
           <div class="flex-between text-sm text-gray">
@@ -175,6 +183,16 @@ function paintApp() {
           <div class="progress-wrap"><div class="progress-bar" style="width:${progressPct}%"></div></div>
         </div>
       ` : ''}
+
+      <div class="mt-8">
+        <div class="section-toggle" id="weight-history-toggle">
+          <span>📅 Storico log (${w.length})</span>
+          <span class="chevron">▾</span>
+        </div>
+        <div class="section-body" id="weight-history-body">
+          ${weightHistoryRowsHtml(w)}
+        </div>
+      </div>
     </div>
 
     <!-- ═══ ATTIVITÀ ═══ -->
@@ -200,18 +218,12 @@ function paintApp() {
         <div class="big-number text-lime">${fmtNum(estimatedKgLost, 1)}<span class="text-sm text-gray"> kg</span></div>
       </div>
 
-      <div id="activity-list">
-        ${state.activityEntries.length === 0
-          ? `<div class="empty-state">Nessuna attività loggata oggi.</div>`
-          : state.activityEntries.map(e => `
-            <div class="list-item">
-              <div class="list-info">
-                <div class="list-name">${escapeHtml(e.name)}</div>
-              </div>
-              <div class="list-value">${fmtNum(e.kcal)} kcal</div>
-              <button class="del-btn" data-del-activity="${e.id}">🗑️</button>
-            </div>
-          `).join('')}
+      <div class="section-toggle open" id="activity-history-toggle">
+        <span>📅 Storico attività (${state.allActivityEntries.length})</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="section-body open" id="activity-history-body">
+        ${activityHistoryHtml(state.allActivityEntries)}
       </div>
     </div>
 
@@ -225,29 +237,96 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// ── Weight chart (SVG) ──────────────────────────────────────
+// ── Weight chart (SVG, all points labeled) ──────────────────
 
 function renderWeightChart(logs) {
-  if (logs.length < 2) {
-    return `<div style="height:70px;display:flex;align-items:center;justify-content:center;color:var(--gray2);font-size:13px">
-      ${logs.length === 0 ? 'Nessun dato. Inizia a loggare il peso.' : 'Aggiungi altri log per vedere il grafico.'}
-    </div>`;
+  if (logs.length === 0) {
+    return `<div style="height:70px;display:flex;align-items:center;justify-content:center;color:var(--gray2);font-size:13px">Nessun dato. Inizia a loggare il peso.</div>`;
   }
-  const recent = logs.slice(-14);
-  const values = recent.map(l => l.value);
+  if (logs.length === 1) {
+    return `<div style="height:70px;display:flex;align-items:center;justify-content:center;color:var(--gray2);font-size:13px">Aggiungi altri log per vedere il grafico.</div>`;
+  }
+  const values = logs.map(l => l.value);
   const min = Math.min(...values) - 1;
   const max = Math.max(...values) + 1;
-  const W = 280, H = 70;
-  const px = (i) => (i / (recent.length - 1)) * W;
-  const py = (v) => H - ((v - min) / (max - min || 1)) * H;
-  const points = recent.map((l, i) => `${px(i)},${py(l.value)}`).join(' ');
-  const area = `${px(0)},${H} ${points} ${px(recent.length - 1)},${H}`;
+  const stepX = 46;
+  const leftPad = 24;
+  const W = Math.max(280, leftPad * 2 + (logs.length - 1) * stepX);
+  const H = 100;
+  const topPad = 22, bottomPad = 10;
+  const px = (i) => leftPad + i * stepX;
+  const py = (v) => topPad + (H - topPad - bottomPad) * (1 - (v - min) / (max - min || 1));
+  const points = logs.map((l, i) => `${px(i)},${py(l.value)}`).join(' ');
+  const area = `${px(0)},${H - bottomPad} ${points} ${px(logs.length - 1)},${H - bottomPad}`;
+  const dots = logs.map((l, i) => `
+    <text x="${px(i)}" y="${py(l.value) - 9}" text-anchor="middle" font-size="10" fill="var(--lime)" font-weight="700">${fmtNum(l.value, 1)}</text>
+    <circle cx="${px(i)}" cy="${py(l.value)}" r="3.5" fill="var(--lime)" stroke="var(--black2)" stroke-width="1.5"></circle>
+  `).join('');
   return `
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:70px;display:block" preserveAspectRatio="none">
-      <polygon points="${area}" fill="var(--lime)" opacity="0.12"></polygon>
-      <polyline points="${points}" fill="none" stroke="var(--lime)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
-    </svg>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;display:block" preserveAspectRatio="none">
+        <polygon points="${area}" fill="var(--lime)" opacity="0.12"></polygon>
+        <polyline points="${points}" fill="none" stroke="var(--lime)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>
+        ${dots}
+      </svg>
+    </div>
   `;
+}
+
+// ── Weight history list ──────────────────────────────────────
+
+function weightHistoryRowsHtml(logs) {
+  const sorted = [...logs].sort((a, b) => b.date.localeCompare(a.date));
+  if (sorted.length === 0) return `<div class="empty-state">Nessun log.</div>`;
+  return sorted.map(l => `
+    <div class="list-item">
+      <div class="list-info"><div class="list-name">${formatDateIT(l.date)}</div></div>
+      <div class="list-value">${fmtNum(l.value, 1)} kg</div>
+      <button class="del-btn" data-del-weight="${l.id}" title="Elimina">🗑️</button>
+    </div>
+  `).join('');
+}
+
+// ── Activity history, grouped by day ─────────────────────────
+
+function groupActivitiesByDay(entries) {
+  const map = new Map();
+  for (const e of entries) {
+    if (!map.has(e.date)) map.set(e.date, []);
+    map.get(e.date).push(e);
+  }
+  return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+}
+
+function activityHistoryHtml(entries) {
+  const groups = groupActivitiesByDay(entries);
+  if (groups.length === 0) return `<div class="empty-state">Nessuna attività registrata.</div>`;
+  const todayStr = today();
+  return groups.map(([date, dayEntries]) => {
+    const dayTotal = dayEntries.reduce((s, e) => s + (e.kcal || 0), 0);
+    const isToday = date === todayStr;
+    return `
+      <div class="day-group ${isToday ? 'open' : ''}" data-day="${date}">
+        <div class="day-group-header" data-toggle-day="${date}">
+          <span>${formatDateIT(date)}${isToday ? ' · Oggi' : ''}</span>
+          <span class="flex gap-8">
+            <span class="text-lime fw-bold">${fmtNum(dayTotal)} kcal</span>
+            <span class="day-group-chevron">▾</span>
+          </span>
+        </div>
+        <div class="day-group-body">
+          ${dayEntries.map(e => `
+            <div class="list-item">
+              <div class="list-info"><div class="list-name">${escapeHtml(e.name)}</div></div>
+              <div class="list-value">${fmtNum(e.kcal)} kcal</div>
+              <button class="del-btn" data-edit-activity="${e.id}" title="Modifica">✏️</button>
+              <button class="del-btn" data-del-activity="${e.id}" title="Elimina">🗑️</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 // ── Modals ───────────────────────────────────────────────────
@@ -258,7 +337,7 @@ function modalsHtml() {
     <div class="modal-overlay" id="modal-weight">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div class="modal-title">Log peso</div>
+        <div class="modal-title">Aggiungi peso</div>
         <div class="form-group">
           <label class="form-label">Peso (kg)</label>
           <input type="number" step="0.1" class="form-input" id="weight-value" placeholder="es. 95.4">
@@ -288,10 +367,14 @@ function modalsHtml() {
     <div class="modal-overlay" id="modal-activity">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div class="modal-title">Aggiungi attività</div>
+        <div class="modal-title" id="activity-modal-title">Aggiungi attività</div>
         <div class="form-group">
           <label class="form-label">Nome attività</label>
           <input type="text" class="form-input" id="activity-name" placeholder="es. Corsa 5km">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data</label>
+          <input type="date" class="form-input" id="activity-date" value="${today()}">
         </div>
         <div class="form-group">
           <label class="form-label">Calorie bruciate</label>
@@ -308,11 +391,17 @@ function modalsHtml() {
 function wireEvents() {
   el('logout-btn').onclick = async () => { await signOut(); };
 
-  el('add-weight-btn').onclick = () => openModal('modal-weight');
   el('settings-btn').onclick = () => openModal('modal-settings');
   setupModalClose('modal-weight');
   setupModalClose('modal-settings');
   setupModalClose('modal-activity');
+
+  // Weight
+  el('add-weight-btn').onclick = () => {
+    el('weight-value').value = '';
+    el('weight-date').value = today();
+    openModal('modal-weight');
+  };
 
   el('save-weight-btn').onclick = async () => {
     const value = parseFloat(el('weight-value').value);
@@ -323,6 +412,16 @@ function wireEvents() {
     await refresh();
   };
 
+  el('weight-history-toggle').onclick = () => {
+    el('weight-history-toggle').classList.toggle('open');
+    el('weight-history-body').classList.toggle('open');
+  };
+
+  root.querySelectorAll('[data-del-weight]').forEach(btn => {
+    btn.onclick = async () => { await deleteWeightLog(btn.dataset.delWeight); await refresh(); };
+  });
+
+  // Settings
   el('save-settings-btn').onclick = async () => {
     const patch = {
       weight_goal: parseFloat(el('set-weight-goal').value) || null,
@@ -332,20 +431,54 @@ function wireEvents() {
     await refresh();
   };
 
+  // Activity
   el('add-activity-btn').onclick = () => {
+    state.editingActivityId = null;
+    el('activity-modal-title').textContent = 'Aggiungi attività';
+    el('save-activity-btn').textContent = 'Aggiungi';
     el('activity-name').value = '';
+    el('activity-date').value = today();
     el('activity-kcal').value = '';
     openModal('modal-activity');
   };
 
   el('save-activity-btn').onclick = async () => {
     const name = el('activity-name').value.trim();
+    const date = el('activity-date').value || today();
     const kcal = parseFloat(el('activity-kcal').value);
     if (!name || !kcal) return;
-    await addActivityEntry({ date: today(), name, kcal });
+    if (state.editingActivityId) {
+      await updateActivityEntry(state.editingActivityId, { name, date, kcal });
+    } else {
+      await addActivityEntry({ date, name, kcal });
+    }
+    state.editingActivityId = null;
     closeModal('modal-activity');
     await refresh();
   };
+
+  el('activity-history-toggle').onclick = () => {
+    el('activity-history-toggle').classList.toggle('open');
+    el('activity-history-body').classList.toggle('open');
+  };
+
+  root.querySelectorAll('[data-toggle-day]').forEach(headerEl => {
+    headerEl.onclick = () => headerEl.closest('.day-group').classList.toggle('open');
+  });
+
+  root.querySelectorAll('[data-edit-activity]').forEach(btn => {
+    btn.onclick = () => {
+      const entry = state.allActivityEntries.find(e => e.id === btn.dataset.editActivity);
+      if (!entry) return;
+      state.editingActivityId = entry.id;
+      el('activity-modal-title').textContent = 'Modifica attività';
+      el('save-activity-btn').textContent = 'Salva modifiche';
+      el('activity-name').value = entry.name;
+      el('activity-date').value = entry.date;
+      el('activity-kcal').value = entry.kcal;
+      openModal('modal-activity');
+    };
+  });
 
   root.querySelectorAll('[data-del-activity]').forEach(btn => {
     btn.onclick = async () => { await deleteActivityEntry(btn.dataset.delActivity); await refresh(); };

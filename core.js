@@ -137,10 +137,31 @@ export async function fetchAllActivityKcal() {
   return data.reduce((s, r) => s + (r.kcal || 0), 0);
 }
 
+export async function fetchAllActivityEntries() {
+  const { data, error } = await supabase
+    .from('activity_entries')
+    .select('*')
+    .order('date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) { console.error(error); return []; }
+  return data;
+}
+
 export async function addActivityEntry(entry) {
   const { data, error } = await supabase
     .from('activity_entries')
     .insert(entry)
+    .select()
+    .single();
+  if (error) { console.error(error); return null; }
+  return data;
+}
+
+export async function updateActivityEntry(id, patch) {
+  const { data, error } = await supabase
+    .from('activity_entries')
+    .update(patch)
+    .eq('id', id)
     .select()
     .single();
   if (error) { console.error(error); return null; }

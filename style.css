@@ -376,6 +376,56 @@ select.form-input { appearance: none; cursor: pointer; }
 .ing-row-name { font-size: 13px; color: var(--white); font-weight: 500; }
 .ing-row-kcal { font-size: 11px; color: var(--gray2); }
 
+/* ── COLLAPSIBLE SECTIONS (storico) ── */
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 10px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--white);
+}
+
+.section-toggle .chevron { transition: transform 0.2s; color: var(--gray2); }
+.section-toggle.open .chevron { transform: rotate(180deg); }
+
+.section-body {
+  display: none;
+  max-height: 280px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.section-body.open { display: block; }
+
+.day-group {
+  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--black3);
+}
+
+.day-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--white);
+}
+
+.day-group-body { display: none; padding: 0 14px 8px; }
+.day-group.open .day-group-body { display: block; }
+.day-group.open .day-group-chevron { transform: rotate(180deg); }
+.day-group-chevron { transition: transform 0.2s; color: var(--gray2); font-size: 11px; }
+
+.day-group .list-item { padding: 8px 0; }
+
 /* ── TABS (login) ── */
 
 .auth-tabs {
