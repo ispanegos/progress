@@ -224,7 +224,7 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// ── Weight chart (SVG, iniziale → obiettivo, gridlines every 5kg) ──
+// ── Weight chart (SVG, iniziale → obiettivo, gridlines every 10kg) ──
 
 function renderWeightChart(logs, weightGoal) {
   const hasGoal = weightGoal !== null && weightGoal !== undefined && !isNaN(weightGoal);
@@ -251,10 +251,10 @@ function renderWeightChart(logs, weightGoal) {
   const px = (i) => (i / (n - 1)) * W;
   const py = (v) => topPad + (H - topPad - bottomPad) * (1 - (v - yMin) / (yMax - yMin));
 
-  // Gridlines + labels every 5kg
-  const gridStart = Math.ceil(yMin / 5) * 5;
+  // Gridlines + labels every 10kg (le "decine")
+  const gridStart = Math.ceil(yMin / 10) * 10;
   let grid = '';
-  for (let v = gridStart; v <= yMax; v += 5) {
+  for (let v = gridStart; v <= yMax; v += 10) {
     const y = py(v);
     const labelY = Math.max(9, y - 4);
     grid += `
@@ -271,10 +271,23 @@ function renderWeightChart(logs, weightGoal) {
     ? `<line x1="${px(realCount - 1).toFixed(1)}" y1="${py(logs[realCount - 1].value).toFixed(1)}" x2="${px(n - 1).toFixed(1)}" y2="${py(weightGoal).toFixed(1)}" stroke="var(--lime)" stroke-width="2" stroke-dasharray="4,4"></line>`
     : '';
 
-  const dots = allPoints.map((p, i) => p.goal
-    ? `<circle cx="${px(i).toFixed(1)}" cy="${py(p.value).toFixed(1)}" r="4" fill="var(--black2)" stroke="var(--lime)" stroke-width="2"></circle>`
-    : `<circle cx="${px(i).toFixed(1)}" cy="${py(p.value).toFixed(1)}" r="3.5" fill="var(--lime)" stroke="var(--black2)" stroke-width="1.5"></circle>`
-  ).join('');
+  // Con pochi log si etichetta ogni puntino; quando sono tanti, solo quelli
+  // vicini a una decina (come le etichette sull'asse) per non affollare il grafico.
+  const manyLogs = realCount > 10;
+  const isNearDecade = (v) => Math.abs(v - Math.round(v / 10) * 10) < 0.5;
+
+  const dots = allPoints.map((p, i) => {
+    const cx = px(i).toFixed(1);
+    const cy = py(p.value).toFixed(1);
+    if (p.goal) {
+      return `<circle cx="${cx}" cy="${cy}" r="4" fill="var(--black2)" stroke="var(--lime)" stroke-width="2"></circle>`;
+    }
+    const showLabel = !manyLogs || isNearDecade(p.value);
+    const label = showLabel
+      ? `<text x="${cx}" y="${(py(p.value) - 9).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--lime)" font-weight="700">${fmtNum(p.value, 1)}</text>`
+      : '';
+    return `${label}<circle cx="${cx}" cy="${cy}" r="3.5" fill="var(--lime)" stroke="var(--black2)" stroke-width="1.5"></circle>`;
+  }).join('');
 
   return `
     <div class="weight-chart-wrap">
