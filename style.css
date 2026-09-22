@@ -428,32 +428,6 @@ select.form-input { appearance: none; cursor: pointer; }
   background: var(--black);
 }
 
-.stepper {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.stepper-btn {
-  background: var(--black3);
-  color: var(--white);
-  border: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 99px;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.stepper-value {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--white);
-  min-width: 50px;
-  text-align: center;
-}
-
 /* ── CATEGORY / SEARCH ── */
 
 .search-box { margin-bottom: 12px; }

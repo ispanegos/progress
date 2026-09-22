@@ -13,7 +13,7 @@ import {
 import { INGREDIENTS } from './ingredients.js';
 import {
   CARBOIDRATI, PROTEINE, LEGUMI, VERDURE_OPZIONALI, TOPPINGS, SNACK_PRESETS_DEFAULT,
-  buildBreakfast, buildMainMeal, buildPresetItems, totalsOf, defaultOilGrams,
+  buildBreakfast, buildMainMeal, buildPresetItems, totalsOf,
 } from './meals.js';
 
 const root = el('app-root');
@@ -682,15 +682,6 @@ function renderMealBuilderModal() {
       </select>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Olio EVO</label>
-      <div class="stepper">
-        <button type="button" class="stepper-btn" id="mb-oil-minus">−</button>
-        <span class="stepper-value">${fmtNum(mb.oilGrams)} g</span>
-        <button type="button" class="stepper-btn" id="mb-oil-plus">+</button>
-      </div>
-    </div>
-
     <div class="meal-summary">
       <div class="text-sm text-gray mb-8">Riepilogo automatico</div>
       ${items.map(i => `
@@ -740,7 +731,6 @@ function wireMealBuilderModal() {
   makeSortablePills(el('mb-proteina-group'), {
     onTap: (id) => {
       mb.proteinaId = id;
-      if (!mb.oilTouched) mb.oilGrams = defaultOilGrams(PROTEINE.find(p => p.id === id).kind);
       rerenderMealBuilder();
     },
     onReorder: (newOrder) => { persistProteinOrder(newOrder); },
@@ -753,9 +743,6 @@ function wireMealBuilderModal() {
   });
 
   el('mb-verdura').onchange = (e) => { mb.verduraId = e.target.value || null; rerenderMealBuilder(); };
-
-  el('mb-oil-minus').onclick = () => { mb.oilGrams = Math.max(0, mb.oilGrams - 5); mb.oilTouched = true; rerenderMealBuilder(); };
-  el('mb-oil-plus').onclick = () => { mb.oilGrams += 5; mb.oilTouched = true; rerenderMealBuilder(); };
 
   const copyToggle = document.getElementById('mb-copy-tomorrow');
   if (copyToggle) copyToggle.onchange = (e) => { mb.copyToTomorrow = e.target.checked; };
@@ -780,8 +767,6 @@ function openMealBuilder(type) {
     hasLegumi: false,
     legumeId: LEGUMI[0].id,
     verduraId: null,
-    oilGrams: defaultOilGrams(defaultProtein.kind),
-    oilTouched: false,
     copyToTomorrow: true,
   };
   rerenderMealBuilder();

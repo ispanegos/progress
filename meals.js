@@ -153,8 +153,19 @@ function baseRiceGrams(proteinKind, hasLegumi) {
   return 80; // uova o formaggio
 }
 
-export function defaultOilGrams(proteinKind) {
-  return proteinKind === 'carne' ? 15 : 10;
+// L'olio non si imposta a mano: si calcola da solo in base a quanti grassi
+// (e quindi calorie) arrivano già da proteina/legumi/carboidrato scelti. Più
+// l'alimento è magro, più olio viene proposto, e viceversa — restando
+// comunque sempre visibile con una quota minima.
+const OIL_TARGET_FAT_GRAMS = 20;
+const OIL_MIN_GRAMS = 5;
+
+function computeOilGrams(itemsSoFar) {
+  const fatSoFar = itemsSoFar.reduce((s, i) => s + i.fat, 0);
+  const oil = ing(OLIO_INGREDIENT_ID);
+  const neededFat = Math.max(0, OIL_TARGET_FAT_GRAMS - fatSoFar);
+  const grams = (neededFat / oil.fatPer100) * 100;
+  return Math.max(OIL_MIN_GRAMS, Math.round(grams / 5) * 5);
 }
 
 // Grammatura del carboidrato scelto, equivalente (a parità di calorie) alla
@@ -178,7 +189,7 @@ export function defaultCarbGrams(carboidratoId, proteinKind, hasLegumi, hasPane,
 // Costruisce la composizione completa di un pranzo/cena a partire dalle
 // scelte dell'utente. Le quantità (proteina, carboidrato, olio) sono già
 // calcolate automaticamente in base a proteina + legumi + pane.
-export function buildMainMeal({ carboidratoId, proteinaId, hasLegumi, legumeId, hasPane, paneGrams, verduraId, oilGrams }) {
+export function buildMainMeal({ carboidratoId, proteinaId, hasLegumi, legumeId, hasPane, paneGrams, verduraId }) {
   const proteina = PROTEINE.find(p => p.id === proteinaId) ?? PROTEINE[0];
   const effectiveHasPane = hasPane && carboidratoId !== 'pane';
   const items = [];
@@ -210,7 +221,7 @@ export function buildMainMeal({ carboidratoId, proteinaId, hasLegumi, legumeId, 
   const verdura = verduraId ? VERDURE_OPZIONALI.find(v => v.id === verduraId) : null;
   items.push(item('verdure', verdura ? verdura.ingredientId : VERDURE_DEFAULT_ID, VERDURE_GRAMS));
 
-  items.push(item('olio', OLIO_INGREDIENT_ID, oilGrams));
+  items.push(item('olio', OLIO_INGREDIENT_ID, computeOilGrams(items)));
 
   return items;
 }
