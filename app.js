@@ -6,6 +6,7 @@ import {
   fetchSettings, saveSettings,
   fetchWeightLogs, addWeightLog, deleteWeightLog,
   fetchAllActivityEntries, addActivityEntry, updateActivityEntry, deleteActivityEntry,
+  fetchStepLogs, upsertStepLog,
   fetchMealsForDate, fetchAllMealsWithItems, addMeal, deleteMeal,
   fetchSnackPresets, addSnackPreset,
   today, addDays, formatDateIT, fmtNum, el, openModal, closeModal, setupModalClose,
@@ -25,6 +26,8 @@ let state = {
   allActivityKcal: 0,
   todayActivityKcal: 0,
   editingActivityId: null,
+  activityDraft: null,
+  stepLogs: [],
   mealsToday: { colazione: null, pranzo: null, cena: null, spuntino_mattina: null, spuntino_pomeriggio: null },
   allMeals: [],
   snackPresets: [],
@@ -128,10 +131,11 @@ async function renderApp() {
 
 async function loadAllData() {
   const todayStr = today();
-  const [settings, weightLogs, allActivityEntries, mealsTodayList, allMeals, snackPresets] = await Promise.all([
+  const [settings, weightLogs, allActivityEntries, stepLogs, mealsTodayList, allMeals, snackPresets] = await Promise.all([
     fetchSettings(),
     fetchWeightLogs(),
     fetchAllActivityEntries(),
+    fetchStepLogs(),
     fetchMealsForDate(todayStr),
     fetchAllMealsWithItems(),
     fetchSnackPresets(),
@@ -139,6 +143,7 @@ async function loadAllData() {
   state.settings = settings;
   state.weightLogs = weightLogs;
   state.allActivityEntries = allActivityEntries;
+  state.stepLogs = stepLogs;
   state.allMeals = allMeals;
   state.snackPresets = snackPresets;
 
@@ -166,11 +171,17 @@ function paintApp() {
   const kcalToGoal = firstWeight && weightGoal ? Math.max(0, (firstWeight - weightGoal) * 7700) : null;
   const progressPct = kcalToGoal ? Math.min(100, Math.round((state.allActivityKcal / kcalToGoal) * 100)) : 0;
 
-  const estimatedKgLost = state.allActivityKcal / 7700;
-
   const daySummary = computeDaySummary();
   const kcalTarget = state.settings?.kcal_target ?? 2000;
   const kcalPct = Math.min(100, Math.round((daySummary.kcal / kcalTarget) * 100));
+
+  const todaySteps = state.stepLogs.find(l => l.date === today())?.steps ?? null;
+  const stepsTarget = state.settings?.steps_target ?? 9000;
+  const stepsPct = todaySteps ? Math.min(100, Math.round((todaySteps / stepsTarget) * 100)) : 0;
+  const avg7 = avgSteps(stepsInWindow(state.stepLogs, 7));
+  const avg30 = avgSteps(stepsInWindow(state.stepLogs, 30));
+  const avgAllSteps = avgSteps(state.stepLogs);
+  const todayActivities = state.allActivityEntries.filter(e => e.date === today());
 
   root.innerHTML = `
     <!-- ═══ PESO ═══ -->
@@ -241,33 +252,58 @@ function paintApp() {
 
     <!-- ═══ ATTIVITÀ ═══ -->
     <div class="card-dark mb-12">
-      <div class="flex-between mb-12">
-        <div class="card-title" style="margin-bottom:0">🏃 Attività</div>
+      <div class="card-title mb-12">🏃 Attività</div>
+
+      <!-- Passi giornalieri -->
+      <div style="cursor:pointer" id="steps-today-block">
+        <div class="text-sm text-gray">Passi oggi</div>
+        <div class="big-number text-lime">${todaySteps !== null ? fmtNum(todaySteps) : '—'}<span class="text-sm text-gray"> / ${fmtNum(stepsTarget)}</span></div>
+      </div>
+      <div class="progress-wrap mb-12"><div class="progress-bar" style="width:${stepsPct}%"></div></div>
+
+      <div class="grid-3 mb-12">
+        <div><div class="text-sm text-gray">Media 7gg</div><div class="text-sm fw-bold text-white">${avg7 ? fmtNum(avg7) : '—'}</div></div>
+        <div><div class="text-sm text-gray">Media 30gg</div><div class="text-sm fw-bold text-white">${avg30 ? fmtNum(avg30) : '—'}</div></div>
+        <div><div class="text-sm text-gray">Media totale</div><div class="text-sm fw-bold text-white">${avgAllSteps ? fmtNum(avgAllSteps) : '—'}</div></div>
+      </div>
+
+      ${renderStepsChart(state.stepLogs, stepsTarget)}
+
+      <!-- Attività fisica -->
+      <div class="flex-between mt-16 mb-12" style="border-top:1px solid var(--black3);padding-top:14px">
+        <div class="card-title" style="margin-bottom:0">Attività fisica</div>
         <button class="btn btn-lime btn-sm" id="add-activity-btn">+ Aggiungi</button>
       </div>
 
-      <div class="grid-2 mb-12">
-        <div>
-          <div class="text-sm text-gray">Oggi</div>
-          <div class="medium-number text-white">${fmtNum(state.todayActivityKcal)}<span class="text-sm text-gray"> kcal</span></div>
-        </div>
-        <div>
-          <div class="text-sm text-gray">Totale di sempre</div>
-          <div class="medium-number text-lime">${fmtNum(state.allActivityKcal)}<span class="text-sm text-gray"> kcal</span></div>
-        </div>
+      <!-- Riepilogo giornaliero -->
+      <div class="meal-summary mb-12">
+        <div class="text-sm text-gray mb-8">Riepilogo di oggi</div>
+        <div class="text-sm text-white">Passi: ${todaySteps !== null ? fmtNum(todaySteps) : '—'} / ${fmtNum(stepsTarget)}</div>
+        ${todayActivities.length ? `
+          <div class="text-sm text-white mt-4">Attività: ${todayActivities.map(a => `${escapeHtml(a.name)} — ${fmtNum(a.duration_minutes || 0)} min`).join(', ')}</div>
+          <div class="text-sm text-lime mt-4">Calorie attività: ${fmtNum(state.todayActivityKcal)} kcal</div>
+        ` : `
+          <div class="text-sm text-gray mt-4">Nessuna attività registrata</div>
+        `}
       </div>
 
-      <div class="mb-12" style="border-top:1px solid var(--black3);padding-top:14px">
-        <div class="text-sm text-gray">Stima kg persi (7700 kcal/kg)</div>
-        <div class="big-number text-lime">${fmtNum(estimatedKgLost, 1)}<span class="text-sm text-gray"> kg</span></div>
-      </div>
-
-      <div class="section-toggle open" id="activity-history-toggle">
+      <div class="section-toggle" id="activity-history-toggle">
         <span>📅 Storico attività (${state.allActivityEntries.length})</span>
         <span class="chevron">▾</span>
       </div>
-      <div class="section-body open" id="activity-history-body">
+      <div class="section-body" id="activity-history-body">
         ${activityHistoryHtml(state.allActivityEntries)}
+      </div>
+
+      <!-- Statistiche -->
+      <div class="mt-8">
+        <div class="section-toggle" id="activity-stats-toggle">
+          <span>📊 Statistiche attività</span>
+          <span class="chevron">▾</span>
+        </div>
+        <div class="section-body" id="activity-stats-body">
+          ${activityStatsHtml()}
+        </div>
       </div>
     </div>
 
@@ -405,7 +441,10 @@ function activityHistoryHtml(entries) {
         <div class="day-group-body">
           ${dayEntries.map(e => `
             <div class="list-item">
-              <div class="list-info"><div class="list-name">${escapeHtml(e.name)}</div></div>
+              <div class="list-info">
+                <div class="list-name">${escapeHtml(e.name)}</div>
+                ${e.duration_minutes ? `<div class="list-sub">${fmtNum(e.duration_minutes)} min</div>` : ''}
+              </div>
               <div class="list-value">${fmtNum(e.kcal)} kcal</div>
               <button class="del-btn" data-edit-activity="${e.id}" title="Modifica">✏️</button>
               <button class="del-btn" data-del-activity="${e.id}" title="Elimina">🗑️</button>
@@ -906,6 +945,219 @@ async function saveCustomSnackPreset() {
   rerenderSnack();
 }
 
+// ── Attività: passi giornalieri ───────────────────────────────
+
+function stepsInWindow(logs, days) {
+  const cutoff = addDays(today(), -(days - 1));
+  return logs.filter(l => l.date >= cutoff);
+}
+
+function avgSteps(logs) {
+  if (!logs.length) return null;
+  return logs.reduce((s, l) => s + l.steps, 0) / logs.length;
+}
+
+function renderStepsChart(logs, target) {
+  if (logs.length === 0) {
+    return `<div class="weight-chart-empty">Nessun dato. Registra i tuoi passi per iniziare.</div>`;
+  }
+  const values = logs.map(l => l.steps);
+  const maxVal = Math.max(...values, target) * 1.1;
+  const W = 300, H = 110;
+  const topPad = 8, bottomPad = 8;
+  const n = logs.length;
+  const gap = W / n;
+  const barW = Math.min(18, gap * 0.6);
+  const py = (v) => topPad + (H - topPad - bottomPad) * (1 - v / maxVal);
+
+  const bars = logs.map((l, i) => {
+    const x = i * gap + (gap - barW) / 2;
+    const y = py(l.steps);
+    const h = H - bottomPad - y;
+    const color = l.steps >= target ? 'var(--lime)' : 'var(--black3)';
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="2" fill="${color}"></rect>`;
+  }).join('');
+
+  const targetY = py(target).toFixed(1);
+
+  return `
+    <div class="weight-chart-wrap">
+      <svg viewBox="0 0 ${W} ${H}" class="weight-chart-svg">
+        <line x1="0" y1="${targetY}" x2="${W}" y2="${targetY}" stroke="var(--gray2)" stroke-width="1" stroke-dasharray="3,4"></line>
+        ${bars}
+      </svg>
+    </div>
+  `;
+}
+
+// ── Attività: attività fisica ──────────────────────────────────
+
+const ACTIVITY_TYPES = [
+  'Camminata', 'Corsa', 'Palestra / pesi', 'Bicicletta', 'Nuoto',
+  'Padel', 'Tennis', 'Calcio', 'Escursione / trekking', 'Altro',
+];
+
+function activityStatsHtml() {
+  const logs = state.stepLogs;
+  const target = state.settings?.steps_target ?? 9000;
+  const totalSteps = logs.reduce((s, l) => s + l.steps, 0);
+  const daysTargetReached = logs.filter(l => l.steps >= target).length;
+  const avgAll = logs.length ? totalSteps / logs.length : 0;
+
+  const entries = state.allActivityEntries;
+  const totalMinutes = entries.reduce((s, e) => s + (Number(e.duration_minutes) || 0), 0);
+
+  const grouping = new Map();
+  for (const e of entries) {
+    const key = (e.type && e.type !== 'Altro') ? e.type : e.name;
+    if (!grouping.has(key)) grouping.set(key, { count: 0, minutes: 0 });
+    const g = grouping.get(key);
+    g.count++;
+    g.minutes += Number(e.duration_minutes) || 0;
+  }
+  const ranking = [...grouping.entries()].sort((a, b) => b[1].count - a[1].count);
+
+  if (logs.length === 0 && entries.length === 0) {
+    return `<div class="empty-state">Nessun dato ancora.</div>`;
+  }
+
+  return `
+    <div class="mb-16">
+      <div class="list-item" style="padding:6px 0"><div class="list-info"><div class="list-name">Media passi giornaliera</div></div><div class="list-value">${fmtNum(avgAll)}</div></div>
+      <div class="list-item" style="padding:6px 0"><div class="list-info"><div class="list-name">Totale passi</div></div><div class="list-value">${fmtNum(totalSteps)}</div></div>
+      <div class="list-item" style="padding:6px 0"><div class="list-info"><div class="list-name">Giorni target raggiunto</div></div><div class="list-value">${daysTargetReached}</div></div>
+    </div>
+    <div class="mb-16">
+      <div class="list-item" style="padding:6px 0"><div class="list-info"><div class="list-name">Numero di attività svolte</div></div><div class="list-value">${entries.length}</div></div>
+      <div class="list-item" style="padding:6px 0"><div class="list-info"><div class="list-name">Minuti totali di attività</div></div><div class="list-value">${fmtNum(totalMinutes)} min</div></div>
+      <div class="list-item" style="padding:6px 0"><div class="list-info"><div class="list-name">Calorie totali attività</div></div><div class="list-value">${fmtNum(state.allActivityKcal)} kcal</div></div>
+      <div class="list-item" style="padding:6px 0"><div class="list-info"><div class="list-name">Stima kg persi (7700 kcal/kg)</div></div><div class="list-value">${fmtNum(state.allActivityKcal / 7700, 1)} kg</div></div>
+    </div>
+    <div>
+      <div class="text-sm text-gray mb-8">Attività più praticate</div>
+      ${ranking.length ? ranking.map(([name, g], i) => `
+        <div class="list-item" style="padding:6px 0">
+          <div class="list-info"><div class="list-name">${i + 1}. ${escapeHtml(name)}</div></div>
+          <div class="list-value">${g.count} sessioni · ${fmtNum(g.minutes)} min</div>
+        </div>
+      `).join('') : `<div class="empty-state">Nessuna attività registrata.</div>`}
+    </div>
+  `;
+}
+
+// ── Attività: modale passi ──────────────────────────────────────
+
+function openStepsModal() {
+  const existing = state.stepLogs.find(l => l.date === today());
+  el('steps-value').value = existing ? existing.steps : '';
+  openModal('modal-steps');
+}
+
+async function saveSteps() {
+  const steps = parseInt(el('steps-value').value, 10);
+  if (isNaN(steps) || steps < 0) return;
+  await upsertStepLog(today(), steps);
+  closeModal('modal-steps');
+  await refresh();
+}
+
+// ── Attività: modale attività fisica ────────────────────────────
+
+function renderActivityModal() {
+  const d = state.activityDraft;
+  const isEdit = !!state.editingActivityId;
+  return `
+    <div class="modal-handle"></div>
+    <div class="modal-title">${isEdit ? 'Modifica attività' : 'Aggiungi attività'}</div>
+    <div class="form-group">
+      <label class="form-label">Tipo</label>
+      <div class="pill-group" id="activity-type-group">
+        ${ACTIVITY_TYPES.map(t => `<button type="button" class="pill ${d.type === t ? 'active' : ''}" data-activity-type="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('')}
+      </div>
+    </div>
+    ${d.type === 'Altro' ? `
+      <div class="form-group">
+        <label class="form-label">Nome attività</label>
+        <input type="text" class="form-input" id="activity-name" placeholder="es. Arrampicata" value="${escapeHtml(d.name || '')}">
+      </div>
+    ` : ''}
+    <div class="form-group">
+      <label class="form-label">Data</label>
+      <input type="date" class="form-input" id="activity-date" value="${d.date}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Durata (minuti)</label>
+      <input type="number" class="form-input" id="activity-duration" placeholder="es. 45" value="${d.duration}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Calorie consumate</label>
+      <input type="number" class="form-input" id="activity-kcal" placeholder="es. 350" value="${d.kcal}">
+    </div>
+    <button class="btn btn-lime btn-block" id="save-activity-btn">${isEdit ? 'Salva modifiche' : 'Aggiungi'}</button>
+  `;
+}
+
+function wireActivityModal() {
+  const sheet = el('activity-sheet');
+  const d = state.activityDraft;
+
+  sheet.querySelectorAll('[data-activity-type]').forEach(btn => {
+    btn.onclick = () => { d.type = btn.dataset.activityType; rerenderActivityModal(); };
+  });
+
+  const nameInput = document.getElementById('activity-name');
+  if (nameInput) nameInput.oninput = (e) => { d.name = e.target.value; };
+
+  el('activity-date').oninput = (e) => { d.date = e.target.value; };
+  el('activity-duration').oninput = (e) => { d.duration = e.target.value; };
+  el('activity-kcal').oninput = (e) => { d.kcal = e.target.value; };
+
+  el('save-activity-btn').onclick = saveActivity;
+}
+
+function rerenderActivityModal() {
+  el('activity-sheet').innerHTML = renderActivityModal();
+  wireActivityModal();
+}
+
+function openActivityModal(entry = null) {
+  if (entry) {
+    state.editingActivityId = entry.id;
+    state.activityDraft = {
+      type: entry.type || 'Altro',
+      name: (!entry.type || entry.type === 'Altro') ? entry.name : '',
+      date: entry.date,
+      duration: entry.duration_minutes ?? '',
+      kcal: entry.kcal ?? '',
+    };
+  } else {
+    state.editingActivityId = null;
+    state.activityDraft = { type: null, name: '', date: today(), duration: '', kcal: '' };
+  }
+  rerenderActivityModal();
+  openModal('modal-activity');
+}
+
+async function saveActivity() {
+  const d = state.activityDraft;
+  if (!d.type) return;
+  const name = d.type === 'Altro' ? (d.name || '').trim() : d.type;
+  const date = d.date || today();
+  const duration = parseFloat(d.duration) || 0;
+  const kcal = parseFloat(d.kcal) || 0;
+  if (!name || !kcal) return;
+  const payload = { date, name, type: d.type, duration_minutes: duration, kcal };
+  if (state.editingActivityId) {
+    await updateActivityEntry(state.editingActivityId, payload);
+  } else {
+    await addActivityEntry(payload);
+  }
+  state.editingActivityId = null;
+  state.activityDraft = null;
+  closeModal('modal-activity');
+  await refresh();
+}
+
 // ── Modals ───────────────────────────────────────────────────
 
 function modalsHtml(weightLogs) {
@@ -943,6 +1195,10 @@ function modalsHtml(weightLogs) {
           <label class="form-label">Target calorico giornaliero (kcal)</label>
           <input type="number" step="50" class="form-input" id="set-kcal-target" value="${state.settings?.kcal_target ?? 2000}" placeholder="es. 2000">
         </div>
+        <div class="form-group">
+          <label class="form-label">Target passi giornalieri</label>
+          <input type="number" step="500" class="form-input" id="set-steps-target" value="${state.settings?.steps_target ?? 9000}" placeholder="es. 9000">
+        </div>
         <button class="btn btn-lime btn-block" id="save-settings-btn">Salva</button>
       </div>
     </div>
@@ -964,22 +1220,19 @@ function modalsHtml(weightLogs) {
 
     <!-- Attività -->
     <div class="modal-overlay" id="modal-activity">
+      <div class="modal-sheet" id="activity-sheet"></div>
+    </div>
+
+    <!-- Passi -->
+    <div class="modal-overlay" id="modal-steps">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div class="modal-title" id="activity-modal-title">Aggiungi attività</div>
+        <div class="modal-title">Passi di oggi</div>
         <div class="form-group">
-          <label class="form-label">Nome attività</label>
-          <input type="text" class="form-input" id="activity-name" placeholder="es. Corsa 5km">
+          <label class="form-label">Passi</label>
+          <input type="number" class="form-input" id="steps-value" placeholder="es. 8500">
         </div>
-        <div class="form-group">
-          <label class="form-label">Data</label>
-          <input type="date" class="form-input" id="activity-date" value="${today()}">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Calorie bruciate</label>
-          <input type="number" class="form-input" id="activity-kcal" placeholder="es. 350">
-        </div>
-        <button class="btn btn-lime btn-block" id="save-activity-btn">Aggiungi</button>
+        <button class="btn btn-lime btn-block" id="save-steps-btn">Salva</button>
       </div>
     </div>
   `;
@@ -1025,6 +1278,7 @@ function wireEvents() {
     const patch = {
       weight_goal: parseFloat(el('set-weight-goal').value) || null,
       kcal_target: parseFloat(el('set-kcal-target').value) || 2000,
+      steps_target: parseFloat(el('set-steps-target').value) || 9000,
     };
     await saveSettings(patch);
     closeModal('modal-settings');
@@ -1055,35 +1309,22 @@ function wireEvents() {
     el('food-stats-body').classList.toggle('open');
   };
 
-  // Activity
-  el('add-activity-btn').onclick = () => {
-    state.editingActivityId = null;
-    el('activity-modal-title').textContent = 'Aggiungi attività';
-    el('save-activity-btn').textContent = 'Aggiungi';
-    el('activity-name').value = '';
-    el('activity-date').value = today();
-    el('activity-kcal').value = '';
-    openModal('modal-activity');
-  };
+  // Passi
+  setupModalClose('modal-steps');
+  el('steps-today-block').onclick = openStepsModal;
+  el('save-steps-btn').onclick = saveSteps;
 
-  el('save-activity-btn').onclick = async () => {
-    const name = el('activity-name').value.trim();
-    const date = el('activity-date').value || today();
-    const kcal = parseFloat(el('activity-kcal').value);
-    if (!name || !kcal) return;
-    if (state.editingActivityId) {
-      await updateActivityEntry(state.editingActivityId, { name, date, kcal });
-    } else {
-      await addActivityEntry({ date, name, kcal });
-    }
-    state.editingActivityId = null;
-    closeModal('modal-activity');
-    await refresh();
-  };
+  // Attività fisica
+  el('add-activity-btn').onclick = () => openActivityModal();
 
   el('activity-history-toggle').onclick = () => {
     el('activity-history-toggle').classList.toggle('open');
     el('activity-history-body').classList.toggle('open');
+  };
+
+  el('activity-stats-toggle').onclick = () => {
+    el('activity-stats-toggle').classList.toggle('open');
+    el('activity-stats-body').classList.toggle('open');
   };
 
   root.querySelectorAll('[data-toggle-day]').forEach(headerEl => {
@@ -1093,14 +1334,7 @@ function wireEvents() {
   root.querySelectorAll('[data-edit-activity]').forEach(btn => {
     btn.onclick = () => {
       const entry = state.allActivityEntries.find(e => e.id === btn.dataset.editActivity);
-      if (!entry) return;
-      state.editingActivityId = entry.id;
-      el('activity-modal-title').textContent = 'Modifica attività';
-      el('save-activity-btn').textContent = 'Salva modifiche';
-      el('activity-name').value = entry.name;
-      el('activity-date').value = entry.date;
-      el('activity-kcal').value = entry.kcal;
-      openModal('modal-activity');
+      if (entry) openActivityModal(entry);
     };
   });
 

@@ -190,6 +190,27 @@ export async function deleteFoodEntry(id) {
   if (error) console.error(error);
 }
 
+// ── Step logs (box Attività) ───────────────────────────────────
+
+export async function fetchStepLogs() {
+  const { data, error } = await supabase
+    .from('step_logs')
+    .select('*')
+    .order('date', { ascending: true });
+  if (error) { console.error(error); return []; }
+  return data;
+}
+
+export async function upsertStepLog(date, steps) {
+  const { data, error } = await supabase
+    .from('step_logs')
+    .upsert({ date, steps }, { onConflict: 'user_id,date' })
+    .select()
+    .single();
+  if (error) { console.error(error); return null; }
+  return data;
+}
+
 // ── Activity entries ─────────────────────────────────────────
 
 export async function fetchActivityEntries(date) {
