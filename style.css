@@ -67,46 +67,11 @@ body {
 
 /* ── HEADER ── */
 
-.top-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
 .brand {
   font-size: 26px;
   font-weight: 900;
   color: var(--black);
   letter-spacing: -0.5px;
-}
-
-.brand .brand-dot { color: var(--lime); }
-
-.icon-btn {
-  background: var(--black);
-  color: var(--white);
-  border: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 99px;
-  font-size: 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.logout-btn {
-  background: var(--black);
-  color: var(--gray2);
-  border: none;
-  padding: 8px 14px;
-  border-radius: 99px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: 'Poppins', sans-serif;
 }
 
 /* ── CARDS ── */

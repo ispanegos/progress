@@ -143,14 +143,6 @@ function paintApp() {
   const estimatedKgLost = state.allActivityKcal / 7700;
 
   root.innerHTML = `
-    <div class="top-header">
-      <div class="brand">PROGRESS<span class="brand-dot">.</span></div>
-      <div class="flex gap-8">
-        <button class="icon-btn" id="settings-btn" title="Impostazioni">⚙️</button>
-        <button class="logout-btn" id="logout-btn">Esci</button>
-      </div>
-    </div>
-
     <!-- ═══ PESO ═══ -->
     <div class="card-dark mb-12">
       <div class="card-title mb-12">⚖️ Peso</div>
@@ -164,7 +156,7 @@ function paintApp() {
           <div class="big-number text-lime">${lastWeight ? fmtNum(lastWeight, 1) : '—'}<span class="text-sm text-gray"> kg</span></div>
           <div class="text-sm text-gray">Attuale</div>
         </div>
-        <div style="text-align:right">
+        <div style="text-align:right;cursor:pointer" id="weight-goal-block">
           <div style="font-size:20px;font-weight:800;color:var(--white)">${weightGoal ? fmtNum(weightGoal, 1) : '—'}<span class="text-sm text-gray"> kg</span></div>
           <div class="text-sm text-gray">Obiettivo</div>
         </div>
@@ -213,6 +205,8 @@ function paintApp() {
         ${activityHistoryHtml(state.allActivityEntries)}
       </div>
     </div>
+
+    <button class="btn btn-ghost btn-block" id="logout-btn">Esci</button>
 
     ${modalsHtml(w)}
   `;
@@ -423,7 +417,7 @@ function modalsHtml(weightLogs) {
 function wireEvents() {
   el('logout-btn').onclick = async () => { await signOut(); };
 
-  el('settings-btn').onclick = () => openModal('modal-settings');
+  el('weight-goal-block').onclick = () => openModal('modal-settings');
   setupModalClose('modal-weight');
   setupModalClose('modal-settings');
   setupModalClose('modal-activity');
