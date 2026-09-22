@@ -371,6 +371,13 @@ select.form-input { appearance: none; cursor: pointer; }
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.pill.dragging {
+  opacity: 0.5;
+  transform: scale(1.05);
 }
 
 .pill.active {

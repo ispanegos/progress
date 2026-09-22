@@ -559,10 +559,80 @@ async function saveBreakfast() {
 
 // ── Pranzo / Cena: modale ────────────────────────────────────
 
+// Ordina una lista base secondo un array di id salvato (drag & drop
+// dell'utente); gli elementi non ancora ordinati restano in coda, nel loro
+// ordine di default.
+function orderedByIds(baseList, orderIds) {
+  if (!orderIds || !orderIds.length) return baseList;
+  const byId = new Map(baseList.map(x => [x.id, x]));
+  const ordered = orderIds.map(id => byId.get(id)).filter(Boolean);
+  const rest = baseList.filter(x => !orderIds.includes(x.id));
+  return [...ordered, ...rest];
+}
+
+// Pulsanti "pill" selezionabili E riordinabili trascinandoli (mouse o touch,
+// via Pointer Events). Un tocco breve seleziona, un trascinamento riordina.
+function makeSortablePills(container, { onTap, onReorder }) {
+  let dragEl = null, startX = 0, startY = 0, moved = false;
+  const THRESHOLD = 8;
+
+  container.querySelectorAll('.pill[data-sort-id]').forEach(pill => {
+    pill.addEventListener('pointerdown', (e) => {
+      dragEl = pill;
+      moved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      try { pill.setPointerCapture(e.pointerId); } catch {}
+    });
+
+    pill.addEventListener('pointermove', (e) => {
+      if (!dragEl) return;
+      if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) > THRESHOLD) {
+        moved = true;
+        dragEl.classList.add('dragging');
+      }
+      if (!moved) return;
+      const siblings = [...container.querySelectorAll('.pill[data-sort-id]')].filter(el => el !== dragEl);
+      const after = siblings.find(el => {
+        const r = el.getBoundingClientRect();
+        return e.clientX < r.left + r.width / 2 && e.clientY < r.bottom + 4;
+      });
+      if (after) container.insertBefore(dragEl, after);
+      else container.appendChild(dragEl);
+    });
+
+    const finish = () => {
+      if (!dragEl) return;
+      dragEl.classList.remove('dragging');
+      if (moved) {
+        onReorder([...container.querySelectorAll('.pill[data-sort-id]')].map(el => el.dataset.sortId));
+      } else {
+        onTap(dragEl.dataset.sortId);
+      }
+      dragEl = null;
+      moved = false;
+    };
+    pill.addEventListener('pointerup', finish);
+    pill.addEventListener('pointercancel', finish);
+  });
+}
+
+async function persistCarbOrder(newOrder) {
+  state.settings = { ...state.settings, carb_order: newOrder };
+  await saveSettings({ carb_order: newOrder });
+}
+
+async function persistProteinOrder(newOrder) {
+  state.settings = { ...state.settings, protein_order: newOrder };
+  await saveSettings({ protein_order: newOrder });
+}
+
 function renderMealBuilderModal() {
   const mb = state.mealBuilder;
   const items = buildMainMeal(mb);
   const totals = totalsOf(items);
+  const carboidrati = orderedByIds(CARBOIDRATI, state.settings?.carb_order);
+  const proteine = orderedByIds(PROTEINE, state.settings?.protein_order);
 
   return `
     <div class="modal-handle"></div>
@@ -571,7 +641,7 @@ function renderMealBuilderModal() {
     <div class="form-group">
       <label class="form-label">Carboidrati</label>
       <div class="pill-group" id="mb-carboidrato-group">
-        ${CARBOIDRATI.map(c => `<button type="button" class="pill ${mb.carboidratoId === c.id ? 'active' : ''}" data-carboidrato="${c.id}">${c.name}</button>`).join('')}
+        ${carboidrati.map(c => `<button type="button" class="pill ${mb.carboidratoId === c.id ? 'active' : ''}" data-sort-id="${c.id}">${c.name}</button>`).join('')}
       </div>
     </div>
 
@@ -587,17 +657,9 @@ function renderMealBuilderModal() {
 
     <div class="form-group">
       <label class="form-label">Proteina</label>
-      <select class="form-input" id="mb-proteina">
-        <optgroup label="Carne / Pesce">
-          ${PROTEINE.filter(p => p.kind === 'carne').map(p => `<option value="${p.id}" ${mb.proteinaId === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
-        </optgroup>
-        <optgroup label="Uova">
-          <option value="uova" ${mb.proteinaId === 'uova' ? 'selected' : ''}>Uova</option>
-        </optgroup>
-        <optgroup label="Formaggi">
-          ${PROTEINE.filter(p => p.kind === 'formaggio').map(p => `<option value="${p.id}" ${mb.proteinaId === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
-        </optgroup>
-      </select>
+      <div class="pill-group" id="mb-proteina-group">
+        ${proteine.map(p => `<button type="button" class="pill ${mb.proteinaId === p.id ? 'active' : ''}" data-sort-id="${p.id}">${p.name}</button>`).join('')}
+      </div>
     </div>
 
     <div class="form-group">
@@ -657,12 +719,13 @@ function wireMealBuilderModal() {
   const sheet = el('mealbuilder-sheet');
   const mb = state.mealBuilder;
 
-  sheet.querySelectorAll('[data-carboidrato]').forEach(btn => {
-    btn.onclick = () => {
-      mb.carboidratoId = btn.dataset.carboidrato;
-      if (mb.carboidratoId === 'pane') mb.hasPane = false;
+  makeSortablePills(el('mb-carboidrato-group'), {
+    onTap: (id) => {
+      mb.carboidratoId = id;
+      if (id === 'pane') mb.hasPane = false;
       rerenderMealBuilder();
-    };
+    },
+    onReorder: (newOrder) => { persistCarbOrder(newOrder); },
   });
 
   const paneToggle = document.getElementById('mb-pane-toggle');
@@ -674,14 +737,14 @@ function wireMealBuilderModal() {
   const paneInput = document.getElementById('mb-pane-grams');
   if (paneInput) paneInput.oninput = (e) => { mb.paneGrams = parseFloat(e.target.value) || 0; rerenderMealBuilder(); };
 
-  el('mb-proteina').onchange = (e) => {
-    mb.proteinaId = e.target.value;
-    if (!mb.oilTouched) {
-      const p = PROTEINE.find(p => p.id === e.target.value);
-      mb.oilGrams = defaultOilGrams(p.kind);
-    }
-    rerenderMealBuilder();
-  };
+  makeSortablePills(el('mb-proteina-group'), {
+    onTap: (id) => {
+      mb.proteinaId = id;
+      if (!mb.oilTouched) mb.oilGrams = defaultOilGrams(PROTEINE.find(p => p.id === id).kind);
+      rerenderMealBuilder();
+    },
+    onReorder: (newOrder) => { persistProteinOrder(newOrder); },
+  });
 
   el('mb-legumi-toggle').onchange = (e) => { mb.hasLegumi = e.target.checked; rerenderMealBuilder(); };
   const legumiGroup = document.getElementById('mb-legumi-group');
@@ -706,10 +769,11 @@ function rerenderMealBuilder() {
 }
 
 function openMealBuilder(type) {
-  const defaultProtein = PROTEINE[0];
+  const defaultProtein = orderedByIds(PROTEINE, state.settings?.protein_order)[0];
+  const defaultCarb = orderedByIds(CARBOIDRATI, state.settings?.carb_order)[0];
   state.mealBuilder = {
     type,
-    carboidratoId: CARBOIDRATI[0].id,
+    carboidratoId: defaultCarb.id,
     hasPane: false,
     paneGrams: 50,
     proteinaId: defaultProtein.id,
