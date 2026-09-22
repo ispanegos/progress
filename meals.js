@@ -46,10 +46,15 @@ export const BREAKFAST_BASE = [
 ];
 
 export const TOPPINGS = [
-  { id: 'miele',         name: 'Miele',              ingredientId: 'ing117', grams: 15 },
-  { id: 'marmellata',    name: 'Marmellata',         ingredientId: 'ing118', grams: 20 },
-  { id: 'acero',         name: "Sciroppo d'acero",   ingredientId: 'ing132', grams: 20 },
-  { id: 'burroarachidi', name: "Burro d'arachidi",   ingredientId: 'ing119', grams: 10 },
+  { id: 'miele',         name: 'Miele',                    ingredientId: 'ing117', grams: 15 },
+  { id: 'marmellata',    name: 'Marmellata',               ingredientId: 'ing118', grams: 20 },
+  { id: 'acero',         name: "Sciroppo d'acero",         ingredientId: 'ing132', grams: 20 },
+  { id: 'burroarachidi', name: "Burro d'arachidi",         ingredientId: 'ing119', grams: 10 },
+  { id: 'cremanovi',     name: 'Crema Novi 45% nocciole',  ingredientId: 'ing134', grams: 10 },
+  { id: 'ciocc70',       name: 'Cioccolato fondente 70%',  ingredientId: 'ing135', grams: 10 },
+  { id: 'cacaoamaro',    name: 'Cacao amaro',              ingredientId: 'ing120', grams: 10 },
+  { id: 'nocciole',      name: 'Granella di nocciole',     ingredientId: 'ing136', grams: 10 },
+  { id: 'pistacchio',    name: 'Granella di pistacchio',   ingredientId: 'ing137', grams: 10 },
 ];
 
 export function buildBreakfast(toppingId) {

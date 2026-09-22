@@ -145,6 +145,8 @@ const DEFAULT_INGREDIENTS = [
   { id:'ing106', name:'Noci',                    categoryId:'cat08', kcalPer100:689, proteinPer100:14.3, carbsPer100:13.7, fatPer100:65.2, fiberPer100:6.7  },
   { id:'ing107', name:'Anacardi',                categoryId:'cat08', kcalPer100:608, proteinPer100:18.2, carbsPer100:30.2, fatPer100:43.9, fiberPer100:3.3  },
   { id:'ing108', name:'Arachidi',                categoryId:'cat08', kcalPer100:599, proteinPer100:28.1, carbsPer100:16.1, fatPer100:49.4, fiberPer100:8.5  },
+  { id:'ing136', name:'Granella di nocciole',    categoryId:'cat08', kcalPer100:628, proteinPer100:15.0, carbsPer100:17.0, fatPer100:61.0, fiberPer100:9.7  },
+  { id:'ing137', name:'Granella di pistacchio',  categoryId:'cat08', kcalPer100:562, proteinPer100:20.6, carbsPer100:27.2, fatPer100:45.4, fiberPer100:10.3 },
   // CONDIMENTI
   { id:'ing109', name:'Olio EVO',                categoryId:'cat09', kcalPer100:884, proteinPer100:0.0,  carbsPer100:0.0,  fatPer100:99.9, fiberPer100:0.0  },
   { id:'ing110', name:'Aceto balsamico',         categoryId:'cat09', kcalPer100:88,  proteinPer100:0.5,  carbsPer100:17.0, fatPer100:0.0,  fiberPer100:0.0  },
@@ -162,6 +164,8 @@ const DEFAULT_INGREDIENTS = [
   { id:'ing120', name:'Cacao amaro in polvere',  categoryId:'cat10', kcalPer100:229, proteinPer100:19.6, carbsPer100:11.4, fatPer100:12.4, fiberPer100:33.2 },
   { id:'ing121', name:'Cioccolato fondente',     categoryId:'cat10', kcalPer100:598, proteinPer100:7.3,  carbsPer100:46.4, fatPer100:42.6, fiberPer100:10.9 },
   { id:'ing122', name:'Cioccolato al latte',     categoryId:'cat10', kcalPer100:535, proteinPer100:7.4,  carbsPer100:56.9, fatPer100:30.7, fiberPer100:3.4  },
+  { id:'ing134', name:'Crema Novi 45% nocciole', categoryId:'cat10', kcalPer100:549, proteinPer100:6.2,  carbsPer100:53.0, fatPer100:34.0, fiberPer100:4.0  },
+  { id:'ing135', name:'Cioccolato fondente 70%', categoryId:'cat10', kcalPer100:600, proteinPer100:8.0,  carbsPer100:38.0, fatPer100:43.0, fiberPer100:10.0 },
   // BEVANDE
   { id:'ing123', name:'Caffè (espresso)',         categoryId:'cat11', kcalPer100:2,   proteinPer100:0.1,  carbsPer100:0.0,  fatPer100:0.0,  fiberPer100:0.0  },
   // ALTRO

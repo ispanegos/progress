@@ -503,12 +503,12 @@ function foodStatsHtml(allMeals) {
 function renderBreakfastModal() {
   const items = buildBreakfast(state.breakfastTopping);
   const totals = totalsOf(items);
-  const baseItems = items.filter(i => i.role === 'base');
+  const checklistItems = items.filter(i => i.role === 'base' || i.role === 'topping');
   return `
     <div class="modal-handle"></div>
     <div class="modal-title">Colazione</div>
     <div class="mb-16">
-      ${baseItems.map(i => `
+      ${checklistItems.map(i => `
         <div class="list-item" style="padding:6px 0">
           <div class="list-info"><div class="list-name">✓ ${escapeHtml(i.name)}</div></div>
           <div class="list-value">${fmtNum(i.grams)} g</div>
@@ -518,7 +518,7 @@ function renderBreakfastModal() {
     <div class="form-group">
       <label class="form-label">Topping</label>
       <div class="pill-group" id="bf-topping-group">
-        ${TOPPINGS.map(t => `<button type="button" class="pill ${state.breakfastTopping === t.id ? 'active' : ''}" data-topping="${t.id}">${escapeHtml(t.name)}</button>`).join('')}
+        ${TOPPINGS.map(t => `<button type="button" class="pill ${state.breakfastTopping === t.id ? 'active' : ''}" data-topping="${t.id}">${escapeHtml(t.name)} · ${t.grams} g</button>`).join('')}
       </div>
     </div>
     <div class="meal-summary">
