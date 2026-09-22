@@ -12,7 +12,7 @@ import {
 } from './core.js';
 import { INGREDIENTS } from './ingredients.js';
 import {
-  CEREALI, PROTEINE, LEGUMI, VERDURE_OPZIONALI, TOPPINGS, SNACK_PRESETS_DEFAULT,
+  CARBOIDRATI, PROTEINE, LEGUMI, VERDURE_OPZIONALI, TOPPINGS, SNACK_PRESETS_DEFAULT,
   buildBreakfast, buildMainMeal, buildPresetItems, totalsOf, defaultOilGrams,
 } from './meals.js';
 
@@ -456,7 +456,7 @@ function foodStatsHtml(allMeals) {
   if (allMeals.length === 0) return `<div class="empty-state">Nessun pasto registrato ancora.</div>`;
 
   const ingredientCounts = new Map();
-  const cerealCounts = new Map();
+  const carbCounts = new Map();
   const proteinCounts = new Map();
   let legumiThisWeek = 0;
   const weekAgo = new Date();
@@ -467,7 +467,7 @@ function foodStatsHtml(allMeals) {
     const roles = new Set(items.map(i => i.role));
     for (const it of items) {
       ingredientCounts.set(it.name, (ingredientCounts.get(it.name) || 0) + 1);
-      if (it.role === 'cereale') cerealCounts.set(it.name, (cerealCounts.get(it.name) || 0) + 1);
+      if (it.role === 'carboidrato') carbCounts.set(it.name, (carbCounts.get(it.name) || 0) + 1);
       if (it.role === 'proteina') proteinCounts.set(it.name, (proteinCounts.get(it.name) || 0) + 1);
     }
     if (roles.has('legumi') && new Date(meal.date) >= weekAgo) legumiThisWeek++;
@@ -484,8 +484,8 @@ function foodStatsHtml(allMeals) {
       ${rankList(new Map([...ingredientCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)), 'pasti')}
     </div>
     <div class="mb-16">
-      <div class="text-sm text-gray mb-8">Distribuzione cereali</div>
-      ${cerealCounts.size ? rankList(cerealCounts, 'pasti') : `<div class="empty-state">Nessun dato.</div>`}
+      <div class="text-sm text-gray mb-8">Distribuzione carboidrati</div>
+      ${carbCounts.size ? rankList(carbCounts, 'pasti') : `<div class="empty-state">Nessun dato.</div>`}
     </div>
     <div class="mb-16">
       <div class="text-sm text-gray mb-8">Distribuzione proteine</div>
@@ -569,19 +569,21 @@ function renderMealBuilderModal() {
     <div class="modal-title">${MEAL_LABELS[mb.type]}</div>
 
     <div class="form-group">
-      <label class="form-label">Cereale</label>
-      <div class="pill-group" id="mb-cereale-group">
-        ${CEREALI.map(c => `<button type="button" class="pill ${mb.cerealeId === c.id ? 'active' : ''}" data-cereale="${c.id}">${c.name}</button>`).join('')}
+      <label class="form-label">Carboidrati</label>
+      <div class="pill-group" id="mb-carboidrato-group">
+        ${CARBOIDRATI.map(c => `<button type="button" class="pill ${mb.carboidratoId === c.id ? 'active' : ''}" data-carboidrato="${c.id}">${c.name}</button>`).join('')}
       </div>
     </div>
 
-    <div class="form-group">
-      <div class="flex-between">
-        <label class="form-label" style="margin-bottom:0">Aggiungi pane</label>
-        <label class="switch"><input type="checkbox" id="mb-pane-toggle" ${mb.hasPane ? 'checked' : ''}><span class="switch-slider"></span></label>
+    ${mb.carboidratoId !== 'pane' ? `
+      <div class="form-group">
+        <div class="flex-between">
+          <label class="form-label" style="margin-bottom:0">Aggiungi pane</label>
+          <label class="switch"><input type="checkbox" id="mb-pane-toggle" ${mb.hasPane ? 'checked' : ''}><span class="switch-slider"></span></label>
+        </div>
+        ${mb.hasPane ? `<input type="number" class="form-input mt-8" id="mb-pane-grams" value="${mb.paneGrams}" step="5">` : ''}
       </div>
-      ${mb.hasPane ? `<input type="number" class="form-input mt-8" id="mb-pane-grams" value="${mb.paneGrams}" step="5">` : ''}
-    </div>
+    ` : ''}
 
     <div class="form-group">
       <label class="form-label">Proteina</label>
@@ -641,7 +643,7 @@ function renderMealBuilderModal() {
     ${mb.type === 'cena' ? `
       <div class="form-group mt-16">
         <div class="flex-between">
-          <label class="form-label" style="margin-bottom:0">Usa anche come pranzo di domani</label>
+          <label class="form-label" style="margin-bottom:0">Copia per pranzo di domani</label>
           <label class="switch"><input type="checkbox" id="mb-copy-tomorrow" ${mb.copyToTomorrow ? 'checked' : ''}><span class="switch-slider"></span></label>
         </div>
       </div>
@@ -655,11 +657,16 @@ function wireMealBuilderModal() {
   const sheet = el('mealbuilder-sheet');
   const mb = state.mealBuilder;
 
-  sheet.querySelectorAll('[data-cereale]').forEach(btn => {
-    btn.onclick = () => { mb.cerealeId = btn.dataset.cereale; rerenderMealBuilder(); };
+  sheet.querySelectorAll('[data-carboidrato]').forEach(btn => {
+    btn.onclick = () => {
+      mb.carboidratoId = btn.dataset.carboidrato;
+      if (mb.carboidratoId === 'pane') mb.hasPane = false;
+      rerenderMealBuilder();
+    };
   });
 
-  el('mb-pane-toggle').onchange = (e) => {
+  const paneToggle = document.getElementById('mb-pane-toggle');
+  if (paneToggle) paneToggle.onchange = (e) => {
     mb.hasPane = e.target.checked;
     if (mb.hasPane && !mb.paneGrams) mb.paneGrams = 50;
     rerenderMealBuilder();
@@ -702,7 +709,7 @@ function openMealBuilder(type) {
   const defaultProtein = PROTEINE[0];
   state.mealBuilder = {
     type,
-    cerealeId: CEREALI[0].id,
+    carboidratoId: CARBOIDRATI[0].id,
     hasPane: false,
     paneGrams: 50,
     proteinaId: defaultProtein.id,

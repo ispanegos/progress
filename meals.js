@@ -1,7 +1,7 @@
 // ============================================================
 // PROGRESS — Motore pasti: composizione automatica e calcolo macro
 // ============================================================
-// La dieta è già strutturata: l'utente sceglie cereale/pane/proteina/
+// La dieta è già strutturata: l'utente sceglie carboidrato/pane/proteina/
 // legumi/verdure/olio e questo modulo calcola grammi, calorie e macro,
 // nascondendo la logica delle "sei combinazioni" dietro un'interfaccia
 // semplice (vedi box_alimentazione_app.md).
@@ -66,11 +66,30 @@ export function buildBreakfast(toppingId) {
 
 // ── Pranzo / Cena ────────────────────────────────────────────
 
-export const CEREALI = [
-  { id: 'riso',  name: 'Riso',  ingredientId: 'ing005' },
-  { id: 'farro', name: 'Farro', ingredientId: 'ing007' },
-  { id: 'pasta', name: 'Pasta', ingredientId: 'ing004' },
+export const CARBOIDRATI = [
+  { id: 'riso',     name: 'Riso',              ingredientId: 'ing005' },
+  { id: 'farro',    name: 'Farro',             ingredientId: 'ing007' },
+  { id: 'pasta',    name: 'Pasta',             ingredientId: 'ing004' },
+  { id: 'couscous', name: 'Cous cous',         ingredientId: 'ing008' },
+  { id: 'quinoa',   name: 'Quinoa',            ingredientId: 'ing018' },
+  { id: 'orzo',     name: 'Orzo',              ingredientId: 'ing017' },
+  { id: 'patate',   name: 'Patate',            ingredientId: 'ing009' },
+  { id: 'gnocchi',  name: 'Gnocchi di patate', ingredientId: 'ing020' },
+  { id: 'polenta',  name: 'Polenta',           ingredientId: 'ing021' },
+  { id: 'pane',     name: 'Pane',              ingredientId: 'ing001' },
 ];
+
+// Riferimento per le grammature "equivalenti": tutte le quantità standard
+// (90/80/60 g) sono calibrate sul riso; per gli altri carboidrati si calcola
+// la grammatura che fornisce le stesse calorie del riso alla stessa porzione.
+const CARB_REFERENCE_ID = 'ing005';
+
+function equivalentGrams(ingredientId, referenceGrams) {
+  const reference = ing(CARB_REFERENCE_ID);
+  const target = ing(ingredientId);
+  const targetKcal = reference.kcalPer100 * (referenceGrams / 100);
+  return Math.max(0, Math.round((targetKcal / target.kcalPer100) * 100 / 5) * 5);
+}
 
 export const PANE = { ingredientId: 'ing001', name: 'Pane', defaultGrams: 50 };
 
@@ -110,32 +129,40 @@ export const VERDURE_GRAMS = 300;
 
 export const OLIO_INGREDIENT_ID = 'ing109';
 
-function baseCerealGrams(proteinKind, hasLegumi) {
+function baseRiceGrams(proteinKind, hasLegumi) {
   if (hasLegumi) return 60;
   if (proteinKind === 'carne') return 90;
   return 80; // uova o formaggio
-}
-
-function cerealWithBread(base, paneGrams) {
-  if (!paneGrams) return base;
-  const reduced = base - paneGrams * 0.7;
-  return Math.max(0, Math.round(reduced / 5) * 5);
 }
 
 export function defaultOilGrams(proteinKind) {
   return proteinKind === 'carne' ? 15 : 10;
 }
 
-export function defaultCerealGrams(proteinKind, hasLegumi, hasPane, paneGrams) {
-  const base = baseCerealGrams(proteinKind, hasLegumi);
-  return hasPane ? cerealWithBread(base, paneGrams) : base;
+// Grammatura del carboidrato scelto, equivalente (a parità di calorie) alla
+// quota standard di riso (90/80/60 g) prevista dalla combinazione proteina +
+// legumi. Se è attivo il pane come aggiunta, la quota si riduce di una
+// grammatura anch'essa equivalente alle calorie del pane, non un valore fisso.
+export function defaultCarbGrams(carboidratoId, proteinKind, hasLegumi, hasPane, paneGrams) {
+  const carboidrato = CARBOIDRATI.find(c => c.id === carboidratoId) ?? CARBOIDRATI[0];
+  const riceBase = baseRiceGrams(proteinKind, hasLegumi);
+  let grams = equivalentGrams(carboidrato.ingredientId, riceBase);
+
+  if (hasPane && paneGrams && carboidratoId !== 'pane') {
+    const pane = ing(PANE.ingredientId);
+    const target = ing(carboidrato.ingredientId);
+    const reductionGrams = (paneGrams * pane.kcalPer100) / target.kcalPer100;
+    grams = Math.max(0, Math.round((grams - reductionGrams) / 5) * 5);
+  }
+  return grams;
 }
 
 // Costruisce la composizione completa di un pranzo/cena a partire dalle
-// scelte dell'utente. Le quantità (proteina, cereale, olio) sono già
+// scelte dell'utente. Le quantità (proteina, carboidrato, olio) sono già
 // calcolate automaticamente in base a proteina + legumi + pane.
-export function buildMainMeal({ cerealeId, proteinaId, hasLegumi, legumeId, hasPane, paneGrams, verduraId, oilGrams }) {
+export function buildMainMeal({ carboidratoId, proteinaId, hasLegumi, legumeId, hasPane, paneGrams, verduraId, oilGrams }) {
   const proteina = PROTEINE.find(p => p.id === proteinaId) ?? PROTEINE[0];
+  const effectiveHasPane = hasPane && carboidratoId !== 'pane';
   const items = [];
 
   if (proteina.kind === 'uova') {
@@ -157,10 +184,10 @@ export function buildMainMeal({ cerealeId, proteinaId, hasLegumi, legumeId, hasP
     }
   }
 
-  const cereale = CEREALI.find(c => c.id === cerealeId) ?? CEREALI[0];
-  const cerealeGrams = defaultCerealGrams(proteina.kind, hasLegumi, hasPane, paneGrams);
-  if (cerealeGrams > 0) items.push(item('cereale', cereale.ingredientId, cerealeGrams));
-  if (hasPane) items.push(item('pane', PANE.ingredientId, paneGrams));
+  const carboidrato = CARBOIDRATI.find(c => c.id === carboidratoId) ?? CARBOIDRATI[0];
+  const carbGrams = defaultCarbGrams(carboidratoId, proteina.kind, hasLegumi, effectiveHasPane, paneGrams);
+  if (carbGrams > 0) items.push(item('carboidrato', carboidrato.ingredientId, carbGrams));
+  if (effectiveHasPane) items.push(item('pane', PANE.ingredientId, paneGrams));
 
   const verdura = verduraId ? VERDURE_OPZIONALI.find(v => v.id === verduraId) : null;
   items.push(item('verdure', verdura ? verdura.ingredientId : VERDURE_DEFAULT_ID, VERDURE_GRAMS));
