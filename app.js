@@ -153,27 +153,24 @@ function paintApp() {
 
     <!-- ═══ PESO ═══ -->
     <div class="card-dark mb-12">
-      <div class="flex-between mb-12">
-        <div class="card-title" style="margin-bottom:0">⚖️ Peso</div>
-        <button class="btn btn-lime btn-sm" id="add-weight-btn">+ Aggiungi</button>
-      </div>
+      <div class="card-title mb-12">⚖️ Peso</div>
 
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:18px">
         <div>
-          <div class="text-sm text-gray">Iniziale</div>
           <div style="font-size:20px;font-weight:800;color:var(--white)">${firstWeight ? fmtNum(firstWeight, 1) : '—'}<span class="text-sm text-gray"> kg</span></div>
+          <div class="text-sm text-gray">Iniziale</div>
         </div>
-        <div style="text-align:center">
-          <div class="text-sm text-gray">Attuale</div>
+        <div style="text-align:center;cursor:pointer" id="weight-current-block">
           <div class="big-number text-lime">${lastWeight ? fmtNum(lastWeight, 1) : '—'}<span class="text-sm text-gray"> kg</span></div>
+          <div class="text-sm text-gray">Attuale</div>
         </div>
         <div style="text-align:right">
-          <div class="text-sm text-gray">Obiettivo</div>
           <div style="font-size:20px;font-weight:800;color:var(--white)">${weightGoal ? fmtNum(weightGoal, 1) : '—'}<span class="text-sm text-gray"> kg</span></div>
+          <div class="text-sm text-gray">Obiettivo</div>
         </div>
       </div>
 
-      ${renderWeightChart(w)}
+      ${renderWeightChart(w, weightGoal)}
 
       ${kcalToGoal ? `
         <div class="mt-16">
@@ -183,16 +180,6 @@ function paintApp() {
           <div class="progress-wrap"><div class="progress-bar" style="width:${progressPct}%"></div></div>
         </div>
       ` : ''}
-
-      <div class="mt-8">
-        <div class="section-toggle" id="weight-history-toggle">
-          <span>📅 Storico log (${w.length})</span>
-          <span class="chevron">▾</span>
-        </div>
-        <div class="section-body" id="weight-history-body">
-          ${weightHistoryRowsHtml(w)}
-        </div>
-      </div>
     </div>
 
     <!-- ═══ ATTIVITÀ ═══ -->
@@ -227,7 +214,7 @@ function paintApp() {
       </div>
     </div>
 
-    ${modalsHtml()}
+    ${modalsHtml(w)}
   `;
 
   wireEvents();
@@ -237,36 +224,65 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// ── Weight chart (SVG, all points labeled) ──────────────────
+// ── Weight chart (SVG, iniziale → obiettivo, gridlines every 5kg) ──
 
-function renderWeightChart(logs) {
+function renderWeightChart(logs, weightGoal) {
+  const hasGoal = weightGoal !== null && weightGoal !== undefined && !isNaN(weightGoal);
+
   if (logs.length === 0) {
-    return `<div style="height:70px;display:flex;align-items:center;justify-content:center;color:var(--gray2);font-size:13px">Nessun dato. Inizia a loggare il peso.</div>`;
+    return `<div class="weight-chart-empty">Nessun dato. Registra il tuo peso per iniziare.</div>`;
   }
-  if (logs.length === 1) {
-    return `<div style="height:70px;display:flex;align-items:center;justify-content:center;color:var(--gray2);font-size:13px">Aggiungi altri log per vedere il grafico.</div>`;
+  if (logs.length === 1 && !hasGoal) {
+    return `<div class="weight-chart-empty">Registra un altro peso per vedere l'andamento.</div>`;
   }
-  const values = logs.map(l => l.value);
-  const min = Math.min(...values) - 1;
-  const max = Math.max(...values) + 1;
-  const stepX = 46;
-  const leftPad = 24;
-  const W = Math.max(280, leftPad * 2 + (logs.length - 1) * stepX);
-  const H = 100;
-  const topPad = 22, bottomPad = 10;
-  const px = (i) => leftPad + i * stepX;
-  const py = (v) => topPad + (H - topPad - bottomPad) * (1 - (v - min) / (max - min || 1));
-  const points = logs.map((l, i) => `${px(i)},${py(l.value)}`).join(' ');
-  const area = `${px(0)},${H - bottomPad} ${points} ${px(logs.length - 1)},${H - bottomPad}`;
-  const dots = logs.map((l, i) => `
-    <text x="${px(i)}" y="${py(l.value) - 9}" text-anchor="middle" font-size="10" fill="var(--lime)" font-weight="700">${fmtNum(l.value, 1)}</text>
-    <circle cx="${px(i)}" cy="${py(l.value)}" r="3.5" fill="var(--lime)" stroke="var(--black2)" stroke-width="1.5"></circle>
-  `).join('');
+
+  const allPoints = hasGoal ? [...logs, { value: weightGoal, goal: true }] : logs;
+  const n = allPoints.length;
+
+  const values = allPoints.map(p => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const yMin = min - range * 0.12;
+  const yMax = max + range * 0.12;
+
+  const W = 300, H = 120;
+  const topPad = 12, bottomPad = 12;
+  const px = (i) => (i / (n - 1)) * W;
+  const py = (v) => topPad + (H - topPad - bottomPad) * (1 - (v - yMin) / (yMax - yMin));
+
+  // Gridlines + labels every 5kg
+  const gridStart = Math.ceil(yMin / 5) * 5;
+  let grid = '';
+  for (let v = gridStart; v <= yMax; v += 5) {
+    const y = py(v);
+    const labelY = Math.max(9, y - 4);
+    grid += `
+      <line x1="0" y1="${y.toFixed(1)}" x2="${W}" y2="${y.toFixed(1)}" stroke="var(--black3)" stroke-width="1"></line>
+      <text x="4" y="${labelY.toFixed(1)}" font-size="9" fill="var(--gray2)">${v}</text>
+    `;
+  }
+
+  const realCount = logs.length;
+  const linePts = logs.map((l, i) => `${px(i).toFixed(1)},${py(l.value).toFixed(1)}`).join(' ');
+  const areaPts = `${px(0).toFixed(1)},${(H - bottomPad).toFixed(1)} ${allPoints.map((p, i) => `${px(i).toFixed(1)},${py(p.value).toFixed(1)}`).join(' ')} ${px(n - 1).toFixed(1)},${(H - bottomPad).toFixed(1)}`;
+
+  const goalSegment = hasGoal
+    ? `<line x1="${px(realCount - 1).toFixed(1)}" y1="${py(logs[realCount - 1].value).toFixed(1)}" x2="${px(n - 1).toFixed(1)}" y2="${py(weightGoal).toFixed(1)}" stroke="var(--lime)" stroke-width="2" stroke-dasharray="4,4"></line>`
+    : '';
+
+  const dots = allPoints.map((p, i) => p.goal
+    ? `<circle cx="${px(i).toFixed(1)}" cy="${py(p.value).toFixed(1)}" r="4" fill="var(--black2)" stroke="var(--lime)" stroke-width="2"></circle>`
+    : `<circle cx="${px(i).toFixed(1)}" cy="${py(p.value).toFixed(1)}" r="3.5" fill="var(--lime)" stroke="var(--black2)" stroke-width="1.5"></circle>`
+  ).join('');
+
   return `
-    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <svg viewBox="0 0 ${W} ${H}" style="width:${W}px;height:${H}px;display:block" preserveAspectRatio="none">
-        <polygon points="${area}" fill="var(--lime)" opacity="0.12"></polygon>
-        <polyline points="${points}" fill="none" stroke="var(--lime)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>
+    <div class="weight-chart-wrap">
+      <svg viewBox="0 0 ${W} ${H}" class="weight-chart-svg">
+        ${grid}
+        <polygon points="${areaPts}" fill="var(--lime)" opacity="0.12"></polygon>
+        <polyline points="${linePts}" fill="none" stroke="var(--lime)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>
+        ${goalSegment}
         ${dots}
       </svg>
     </div>
@@ -331,22 +347,25 @@ function activityHistoryHtml(entries) {
 
 // ── Modals ───────────────────────────────────────────────────
 
-function modalsHtml() {
+function modalsHtml(weightLogs) {
   return `
     <!-- Peso -->
     <div class="modal-overlay" id="modal-weight">
       <div class="modal-sheet">
         <div class="modal-handle"></div>
-        <div class="modal-title">Aggiungi peso</div>
+        <div class="modal-title">Registra peso di oggi</div>
         <div class="form-group">
           <label class="form-label">Peso (kg)</label>
           <input type="number" step="0.1" class="form-input" id="weight-value" placeholder="es. 95.4">
         </div>
-        <div class="form-group">
-          <label class="form-label">Data</label>
-          <input type="date" class="form-input" id="weight-date" value="${today()}">
-        </div>
         <button class="btn btn-lime btn-block" id="save-weight-btn">Salva</button>
+
+        <div class="mt-16">
+          <div class="text-sm text-gray mb-8">Storico log (${weightLogs.length})</div>
+          <div id="weight-history-body" style="max-height:240px;overflow-y:auto">
+            ${weightHistoryRowsHtml(weightLogs)}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -397,28 +416,25 @@ function wireEvents() {
   setupModalClose('modal-activity');
 
   // Weight
-  el('add-weight-btn').onclick = () => {
+  el('weight-current-block').onclick = () => {
     el('weight-value').value = '';
-    el('weight-date').value = today();
     openModal('modal-weight');
   };
 
   el('save-weight-btn').onclick = async () => {
     const value = parseFloat(el('weight-value').value);
-    const date = el('weight-date').value || today();
     if (!value) return;
-    await addWeightLog(date, value);
+    await addWeightLog(today(), value);
     closeModal('modal-weight');
     await refresh();
   };
 
-  el('weight-history-toggle').onclick = () => {
-    el('weight-history-toggle').classList.toggle('open');
-    el('weight-history-body').classList.toggle('open');
-  };
-
   root.querySelectorAll('[data-del-weight]').forEach(btn => {
-    btn.onclick = async () => { await deleteWeightLog(btn.dataset.delWeight); await refresh(); };
+    btn.onclick = async () => {
+      await deleteWeightLog(btn.dataset.delWeight);
+      await refresh();
+      openModal('modal-weight');
+    };
   });
 
   // Settings

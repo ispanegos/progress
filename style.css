@@ -183,6 +183,28 @@ body {
   transition: width 0.5s ease;
 }
 
+/* ── WEIGHT CHART ── */
+
+.weight-chart-wrap {
+  padding: 0 30px;
+}
+
+.weight-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.weight-chart-empty {
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gray2);
+  font-size: 13px;
+  text-align: center;
+}
+
 /* ── BUTTONS ── */
 
 .btn {
