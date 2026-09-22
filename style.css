@@ -125,6 +125,12 @@ body {
   margin-bottom: 12px;
 }
 
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
 .grid-4 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -321,6 +327,123 @@ select.form-input { appearance: none; cursor: pointer; }
   color: var(--gray2);
   font-size: 13px;
   padding: 16px 0;
+  text-align: center;
+}
+
+/* ── MEAL ROWS (Alimentazione) ── */
+
+.meal-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--black3);
+  cursor: pointer;
+}
+
+.meal-row:last-child { border-bottom: none; }
+
+.meal-row-info { flex: 1; min-width: 0; }
+
+.meal-summary {
+  background: var(--black3);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-top: 4px;
+}
+
+/* ── PILLS / SWITCH / STEPPER ── */
+
+.pill-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill {
+  background: var(--black3);
+  color: var(--white);
+  border: none;
+  padding: 8px 14px;
+  border-radius: 99px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pill.active {
+  background: var(--lime);
+  color: var(--black);
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--black3);
+  border-radius: 99px;
+  transition: background 0.2s;
+}
+
+.switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: var(--white);
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.switch input:checked + .switch-slider {
+  background: var(--lime);
+}
+
+.switch input:checked + .switch-slider::before {
+  transform: translateX(18px);
+  background: var(--black);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stepper-btn {
+  background: var(--black3);
+  color: var(--white);
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 99px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stepper-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--white);
+  min-width: 50px;
   text-align: center;
 }
 

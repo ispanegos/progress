@@ -73,6 +73,9 @@ const DEFAULT_INGREDIENTS = [
   { id:'ing046', name:'Edamame',                 categoryId:'cat04', kcalPer100:122, proteinPer100:11.9, carbsPer100:8.9,  fatPer100:5.2,  fiberPer100:5.2  },
   { id:'ing047', name:'Piselli secchi',          categoryId:'cat04', kcalPer100:340, proteinPer100:23.8, carbsPer100:60.3, fatPer100:1.2,  fiberPer100:25.5 },
   { id:'ing048', name:'Fave secche',             categoryId:'cat04', kcalPer100:341, proteinPer100:26.0, carbsPer100:58.0, fatPer100:1.5,  fiberPer100:25.0 },
+  { id:'ing125', name:'Ceci cotti',              categoryId:'cat04', kcalPer100:164, proteinPer100:8.9,  carbsPer100:27.4, fatPer100:2.6,  fiberPer100:7.6  },
+  { id:'ing126', name:'Fagioli cotti',           categoryId:'cat04', kcalPer100:127, proteinPer100:8.7,  carbsPer100:22.8, fatPer100:0.5,  fiberPer100:6.4  },
+  { id:'ing127', name:'Lenticchie cotte',        categoryId:'cat04', kcalPer100:116, proteinPer100:9.0,  carbsPer100:20.1, fatPer100:0.4,  fiberPer100:7.9  },
   // LATTICINI
   { id:'ing049', name:'Yogurt intero',           categoryId:'cat05', kcalPer100:66,  proteinPer100:3.8,  carbsPer100:4.9,  fatPer100:3.7,  fiberPer100:0.0  },
   { id:'ing050', name:'Yogurt magro',            categoryId:'cat05', kcalPer100:36,  proteinPer100:3.5,  carbsPer100:5.0,  fatPer100:0.2,  fiberPer100:0.0  },
@@ -80,6 +83,10 @@ const DEFAULT_INGREDIENTS = [
   { id:'ing052', name:'Yogurt greco magro',      categoryId:'cat05', kcalPer100:57,  proteinPer100:10.0, carbsPer100:3.8,  fatPer100:0.3,  fiberPer100:0.0  },
   { id:'ing053', name:'Skyr',                    categoryId:'cat05', kcalPer100:63,  proteinPer100:11.0, carbsPer100:5.0,  fatPer100:0.2,  fiberPer100:0.0  },
   { id:'ing054', name:'Ricotta',                 categoryId:'cat05', kcalPer100:146, proteinPer100:11.0, carbsPer100:3.5,  fatPer100:10.9, fiberPer100:0.0  },
+  { id:'ing128', name:'Yogurt greco 0%',         categoryId:'cat05', kcalPer100:57,  proteinPer100:10.0, carbsPer100:3.8,  fatPer100:0.2,  fiberPer100:0.0  },
+  { id:'ing129', name:'Ricotta light',           categoryId:'cat05', kcalPer100:105, proteinPer100:8.0,  carbsPer100:4.0,  fatPer100:6.0,  fiberPer100:0.0  },
+  { id:'ing130', name:'Philadelphia Light',      categoryId:'cat05', kcalPer100:152, proteinPer100:5.5,  carbsPer100:4.0,  fatPer100:13.0, fiberPer100:0.0  },
+  { id:'ing131', name:'Yogurt proteico',         categoryId:'cat05', kcalPer100:60,  proteinPer100:10.5, carbsPer100:3.8,  fatPer100:0.5,  fiberPer100:0.0  },
   { id:'ing055', name:'Fiocchi di latte',        categoryId:'cat05', kcalPer100:103, proteinPer100:12.5, carbsPer100:3.7,  fatPer100:4.3,  fiberPer100:0.0  },
   { id:'ing056', name:'Mozzarella',              categoryId:'cat05', kcalPer100:253, proteinPer100:18.0, carbsPer100:2.6,  fatPer100:19.5, fiberPer100:0.0  },
   { id:'ing057', name:'Parmigiano',              categoryId:'cat05', kcalPer100:392, proteinPer100:33.0, carbsPer100:0.0,  fatPer100:28.4, fiberPer100:0.0  },
@@ -112,6 +119,7 @@ const DEFAULT_INGREDIENTS = [
   { id:'ing083', name:'Fagiolini',               categoryId:'cat06', kcalPer100:27,  proteinPer100:1.8,  carbsPer100:5.7,  fatPer100:0.1,  fiberPer100:3.4  },
   { id:'ing084', name:'Sedano',                  categoryId:'cat06', kcalPer100:13,  proteinPer100:0.9,  carbsPer100:2.4,  fatPer100:0.1,  fiberPer100:1.6  },
   { id:'ing085', name:'Porro',                   categoryId:'cat06', kcalPer100:31,  proteinPer100:1.5,  carbsPer100:7.3,  fatPer100:0.3,  fiberPer100:1.8  },
+  { id:'ing133', name:'Verdure miste',           categoryId:'cat06', kcalPer100:25,  proteinPer100:1.5,  carbsPer100:4.0,  fatPer100:0.3,  fiberPer100:2.0  },
   // FRUTTA
   { id:'ing086', name:'Mela',                    categoryId:'cat07', kcalPer100:52,  proteinPer100:0.3,  carbsPer100:13.8, fatPer100:0.2,  fiberPer100:2.4  },
   { id:'ing087', name:'Pera',                    categoryId:'cat07', kcalPer100:57,  proteinPer100:0.3,  carbsPer100:15.1, fatPer100:0.1,  fiberPer100:3.1  },
@@ -147,6 +155,7 @@ const DEFAULT_INGREDIENTS = [
   { id:'ing115', name:'Senape',                  categoryId:'cat09', kcalPer100:66,  proteinPer100:4.4,  carbsPer100:5.3,  fatPer100:3.9,  fiberPer100:3.9  },
   { id:'ing116', name:'Salsa di soia',           categoryId:'cat09', kcalPer100:60,  proteinPer100:8.1,  carbsPer100:5.6,  fatPer100:0.1,  fiberPer100:0.8  },
   { id:'ing117', name:'Miele',                   categoryId:'cat09', kcalPer100:304, proteinPer100:0.3,  carbsPer100:80.3, fatPer100:0.0,  fiberPer100:0.2  },
+  { id:'ing132', name:"Sciroppo d'acero",        categoryId:'cat09', kcalPer100:260, proteinPer100:0.0,  carbsPer100:67.0, fatPer100:0.2,  fiberPer100:0.0  },
   { id:'ing118', name:'Marmellata light',        categoryId:'cat09', kcalPer100:100, proteinPer100:0.4,  carbsPer100:24.0, fatPer100:0.1,  fiberPer100:1.1  },
   { id:'ing119', name:'Burro di arachidi',       categoryId:'cat09', kcalPer100:598, proteinPer100:22.0, carbsPer100:20.0, fatPer100:51.0, fiberPer100:6.0  },
   // DOLCI

@@ -78,6 +78,79 @@ export async function deleteWeightLog(id) {
   if (error) console.error(error);
 }
 
+// ── Meals (box Alimentazione) ─────────────────────────────────
+
+export async function fetchMealsForDate(date) {
+  const { data, error } = await supabase
+    .from('meals')
+    .select('*, meal_items(*)')
+    .eq('date', date);
+  if (error) { console.error(error); return []; }
+  return data;
+}
+
+export async function fetchAllMealsWithItems() {
+  const { data, error } = await supabase
+    .from('meals')
+    .select('date, type, meal_items(role, ingredient_id, name)');
+  if (error) { console.error(error); return []; }
+  return data;
+}
+
+export async function addMeal(date, type, items, totals) {
+  const { data: meal, error: mealError } = await supabase
+    .from('meals')
+    .insert({ date, type, kcal: totals.kcal, protein: totals.protein, carbs: totals.carbs, fat: totals.fat })
+    .select()
+    .single();
+  if (mealError) { console.error(mealError); return null; }
+
+  const rows = items.map(i => ({
+    meal_id: meal.id,
+    role: i.role,
+    ingredient_id: i.ingredientId,
+    name: i.name,
+    grams: i.grams,
+    unit_label: i.unitLabel,
+    kcal: i.kcal,
+    protein: i.protein,
+    carbs: i.carbs,
+    fat: i.fat,
+  }));
+  const { error: itemsError } = await supabase.from('meal_items').insert(rows);
+  if (itemsError) console.error(itemsError);
+  return meal;
+}
+
+export async function deleteMeal(id) {
+  const { error } = await supabase.from('meals').delete().eq('id', id);
+  if (error) console.error(error);
+}
+
+export async function fetchSnackPresets() {
+  const { data, error } = await supabase
+    .from('snack_presets')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) { console.error(error); return []; }
+  return data;
+}
+
+export async function addSnackPreset(name, items, totals) {
+  const { data, error } = await supabase
+    .from('snack_presets')
+    .insert({ name, items, kcal: totals.kcal, protein: totals.protein, carbs: totals.carbs, fat: totals.fat })
+    .select()
+    .single();
+  if (error) { console.error(error); return null; }
+  return data;
+}
+
+export async function deleteSnackPreset(id) {
+  const { error } = await supabase.from('snack_presets').delete().eq('id', id);
+  if (error) console.error(error);
+}
+
 // ── Food entries ─────────────────────────────────────────────
 
 export async function fetchFoodEntries(date) {
@@ -182,6 +255,13 @@ export function toDateStr(date) {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+export function addDays(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return toDateStr(dt);
 }
 
 export function formatDateIT(dateStr) {

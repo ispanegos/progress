@@ -6,8 +6,15 @@ import {
   fetchSettings, saveSettings,
   fetchWeightLogs, addWeightLog, deleteWeightLog,
   fetchAllActivityEntries, addActivityEntry, updateActivityEntry, deleteActivityEntry,
-  today, formatDateIT, fmtNum, el, openModal, closeModal, setupModalClose,
+  fetchMealsForDate, fetchAllMealsWithItems, addMeal, deleteMeal,
+  fetchSnackPresets, addSnackPreset,
+  today, addDays, formatDateIT, fmtNum, el, openModal, closeModal, setupModalClose,
 } from './core.js';
+import { INGREDIENTS } from './ingredients.js';
+import {
+  CEREALI, PROTEINE, LEGUMI, VERDURE_OPZIONALI, TOPPINGS, SNACK_PRESETS_DEFAULT,
+  buildBreakfast, buildMainMeal, buildPresetItems, totalsOf, defaultOilGrams,
+} from './meals.js';
 
 const root = el('app-root');
 
@@ -18,6 +25,16 @@ let state = {
   allActivityKcal: 0,
   todayActivityKcal: 0,
   editingActivityId: null,
+  mealsToday: { colazione: null, pranzo: null, cena: null, spuntino_mattina: null, spuntino_pomeriggio: null },
+  allMeals: [],
+  snackPresets: [],
+  mealBuilder: null,
+  breakfastTopping: null,
+  snackSlot: null,
+  snackSelectedPresetId: null,
+  snackCustomName: '',
+  snackCustomIngredientId: INGREDIENTS[0].id,
+  snackCustomGrams: 100,
 };
 
 // ── Boot ─────────────────────────────────────────────────────
@@ -110,16 +127,25 @@ async function renderApp() {
 }
 
 async function loadAllData() {
-  const [settings, weightLogs, allActivityEntries] = await Promise.all([
+  const todayStr = today();
+  const [settings, weightLogs, allActivityEntries, mealsTodayList, allMeals, snackPresets] = await Promise.all([
     fetchSettings(),
     fetchWeightLogs(),
     fetchAllActivityEntries(),
+    fetchMealsForDate(todayStr),
+    fetchAllMealsWithItems(),
+    fetchSnackPresets(),
   ]);
   state.settings = settings;
   state.weightLogs = weightLogs;
   state.allActivityEntries = allActivityEntries;
+  state.allMeals = allMeals;
+  state.snackPresets = snackPresets;
 
-  const todayStr = today();
+  const mealsIndex = { colazione: null, pranzo: null, cena: null, spuntino_mattina: null, spuntino_pomeriggio: null };
+  for (const m of mealsTodayList) mealsIndex[m.type] = m;
+  state.mealsToday = mealsIndex;
+
   state.todayActivityKcal = allActivityEntries
     .filter(e => e.date === todayStr)
     .reduce((s, e) => s + (e.kcal || 0), 0);
@@ -141,6 +167,10 @@ function paintApp() {
   const progressPct = kcalToGoal ? Math.min(100, Math.round((state.allActivityKcal / kcalToGoal) * 100)) : 0;
 
   const estimatedKgLost = state.allActivityKcal / 7700;
+
+  const daySummary = computeDaySummary();
+  const kcalTarget = state.settings?.kcal_target ?? 2000;
+  const kcalPct = Math.min(100, Math.round((daySummary.kcal / kcalTarget) * 100));
 
   root.innerHTML = `
     <!-- ═══ PESO ═══ -->
@@ -172,6 +202,41 @@ function paintApp() {
           <div class="progress-wrap"><div class="progress-bar" style="width:${progressPct}%"></div></div>
         </div>
       ` : ''}
+    </div>
+
+    <!-- ═══ ALIMENTAZIONE ═══ -->
+    <div class="card-dark mb-12">
+      <div class="card-title mb-12">🍽️ Alimentazione</div>
+
+      <div class="flex-between" style="align-items:flex-end;margin-bottom:8px">
+        <div>
+          <div class="text-sm text-gray">Oggi</div>
+          <div class="medium-number text-lime">${fmtNum(daySummary.kcal)}<span class="text-sm text-gray"> / ${fmtNum(kcalTarget)} kcal</span></div>
+        </div>
+      </div>
+      <div class="progress-wrap mb-12"><div class="progress-bar" style="width:${kcalPct}%"></div></div>
+
+      <div class="grid-3 mb-16">
+        <div><div class="text-sm text-gray">Proteine</div><div class="text-sm fw-bold text-white">${fmtNum(daySummary.protein)} g</div></div>
+        <div><div class="text-sm text-gray">Carboidrati</div><div class="text-sm fw-bold text-white">${fmtNum(daySummary.carbs)} g</div></div>
+        <div><div class="text-sm text-gray">Grassi</div><div class="text-sm fw-bold text-white">${fmtNum(daySummary.fat)} g</div></div>
+      </div>
+
+      ${mealRowHtml('colazione', '🥣 Colazione', state.mealsToday.colazione)}
+      ${mealRowHtml('pranzo', '🍚 Pranzo', state.mealsToday.pranzo)}
+      ${mealRowHtml('cena', '🌙 Cena', state.mealsToday.cena)}
+      ${mealRowHtml('spuntino_mattina', '🍎 Spuntino mattina', state.mealsToday.spuntino_mattina)}
+      ${mealRowHtml('spuntino_pomeriggio', '🍎 Spuntino pomeriggio', state.mealsToday.spuntino_pomeriggio)}
+
+      <div class="mt-8">
+        <div class="section-toggle" id="food-stats-toggle">
+          <span>📊 Statistiche alimentari</span>
+          <span class="chevron">▾</span>
+        </div>
+        <div class="section-body" id="food-stats-body">
+          ${foodStatsHtml(state.allMeals)}
+        </div>
+      </div>
     </div>
 
     <!-- ═══ ATTIVITÀ ═══ -->
@@ -352,6 +417,432 @@ function activityHistoryHtml(entries) {
   }).join('');
 }
 
+// ── Alimentazione: riepilogo giornaliero ──────────────────────
+
+function computeDaySummary() {
+  return Object.values(state.mealsToday).filter(Boolean).reduce((t, m) => ({
+    kcal: t.kcal + Number(m.kcal),
+    protein: t.protein + Number(m.protein),
+    carbs: t.carbs + Number(m.carbs),
+    fat: t.fat + Number(m.fat),
+  }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+}
+
+const MEAL_LABELS = {
+  colazione: 'Colazione', pranzo: 'Pranzo', cena: 'Cena',
+  spuntino_mattina: 'Spuntino mattina', spuntino_pomeriggio: 'Spuntino pomeriggio',
+};
+
+function mealRowHtml(key, label, meal) {
+  const done = !!meal;
+  return `
+    <div class="meal-row" data-open-meal="${key}">
+      <div class="meal-row-info">
+        <div class="list-name">${label}</div>
+        ${done
+          ? `<div class="list-sub text-lime">✓ Fatto · ${fmtNum(meal.kcal)} kcal</div>`
+          : `<div class="list-sub">Non registrato</div>`}
+      </div>
+      ${done
+        ? `<button class="del-btn" data-del-meal="${meal.id}" title="Elimina">🗑️</button>`
+        : `<span class="text-lime" style="font-size:20px;font-weight:700">›</span>`}
+    </div>
+  `;
+}
+
+// ── Alimentazione: statistiche ─────────────────────────────────
+
+function foodStatsHtml(allMeals) {
+  if (allMeals.length === 0) return `<div class="empty-state">Nessun pasto registrato ancora.</div>`;
+
+  const ingredientCounts = new Map();
+  const cerealCounts = new Map();
+  const proteinCounts = new Map();
+  let legumiThisWeek = 0;
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  for (const meal of allMeals) {
+    const items = meal.meal_items || [];
+    const roles = new Set(items.map(i => i.role));
+    for (const it of items) {
+      ingredientCounts.set(it.name, (ingredientCounts.get(it.name) || 0) + 1);
+      if (it.role === 'cereale') cerealCounts.set(it.name, (cerealCounts.get(it.name) || 0) + 1);
+      if (it.role === 'proteina') proteinCounts.set(it.name, (proteinCounts.get(it.name) || 0) + 1);
+    }
+    if (roles.has('legumi') && new Date(meal.date) >= weekAgo) legumiThisWeek++;
+  }
+
+  const rankList = (map, unit) => [...map.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => `<div class="list-item" style="padding:6px 0"><div class="list-info"><div class="list-name">${escapeHtml(name)}</div></div><div class="list-value">${count} ${unit}</div></div>`)
+    .join('');
+
+  return `
+    <div class="mb-16">
+      <div class="text-sm text-gray mb-8">Alimenti più utilizzati</div>
+      ${rankList(new Map([...ingredientCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)), 'pasti')}
+    </div>
+    <div class="mb-16">
+      <div class="text-sm text-gray mb-8">Distribuzione cereali</div>
+      ${cerealCounts.size ? rankList(cerealCounts, 'pasti') : `<div class="empty-state">Nessun dato.</div>`}
+    </div>
+    <div class="mb-16">
+      <div class="text-sm text-gray mb-8">Distribuzione proteine</div>
+      ${proteinCounts.size ? rankList(proteinCounts, 'pasti') : `<div class="empty-state">Nessun dato.</div>`}
+    </div>
+    <div>
+      <div class="text-sm text-gray mb-8">Frequenza legumi</div>
+      <div class="text-sm text-white">${legumiThisWeek} pasti questa settimana</div>
+    </div>
+  `;
+}
+
+// ── Colazione: modale ────────────────────────────────────────
+
+function renderBreakfastModal() {
+  const items = buildBreakfast(state.breakfastTopping);
+  const totals = totalsOf(items);
+  const baseItems = items.filter(i => i.role === 'base');
+  return `
+    <div class="modal-handle"></div>
+    <div class="modal-title">Colazione</div>
+    <div class="mb-16">
+      ${baseItems.map(i => `
+        <div class="list-item" style="padding:6px 0">
+          <div class="list-info"><div class="list-name">✓ ${escapeHtml(i.name)}</div></div>
+          <div class="list-value">${fmtNum(i.grams)} g</div>
+        </div>
+      `).join('')}
+    </div>
+    <div class="form-group">
+      <label class="form-label">Topping</label>
+      <div class="pill-group" id="bf-topping-group">
+        ${TOPPINGS.map(t => `<button type="button" class="pill ${state.breakfastTopping === t.id ? 'active' : ''}" data-topping="${t.id}">${escapeHtml(t.name)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="meal-summary">
+      <div class="text-lime fw-bold">${fmtNum(totals.kcal)} kcal · P ${fmtNum(totals.protein)}g · C ${fmtNum(totals.carbs)}g · G ${fmtNum(totals.fat)}g</div>
+    </div>
+    <button class="btn btn-lime btn-block mt-16" id="bf-save-btn">✓ Fatto</button>
+  `;
+}
+
+function wireBreakfastModal() {
+  el('breakfast-sheet').querySelectorAll('[data-topping]').forEach(btn => {
+    btn.onclick = () => {
+      state.breakfastTopping = state.breakfastTopping === btn.dataset.topping ? null : btn.dataset.topping;
+      rerenderBreakfast();
+    };
+  });
+  el('bf-save-btn').onclick = saveBreakfast;
+}
+
+function rerenderBreakfast() {
+  el('breakfast-sheet').innerHTML = renderBreakfastModal();
+  wireBreakfastModal();
+}
+
+function openBreakfastModal() {
+  state.breakfastTopping = null;
+  rerenderBreakfast();
+  openModal('modal-breakfast');
+}
+
+async function saveBreakfast() {
+  const items = buildBreakfast(state.breakfastTopping);
+  const totals = totalsOf(items);
+  await addMeal(today(), 'colazione', items, totals);
+  closeModal('modal-breakfast');
+  await refresh();
+}
+
+// ── Pranzo / Cena: modale ────────────────────────────────────
+
+function renderMealBuilderModal() {
+  const mb = state.mealBuilder;
+  const items = buildMainMeal(mb);
+  const totals = totalsOf(items);
+
+  return `
+    <div class="modal-handle"></div>
+    <div class="modal-title">${MEAL_LABELS[mb.type]}</div>
+
+    <div class="form-group">
+      <label class="form-label">Cereale</label>
+      <div class="pill-group" id="mb-cereale-group">
+        ${CEREALI.map(c => `<button type="button" class="pill ${mb.cerealeId === c.id ? 'active' : ''}" data-cereale="${c.id}">${c.name}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="flex-between">
+        <label class="form-label" style="margin-bottom:0">Aggiungi pane</label>
+        <label class="switch"><input type="checkbox" id="mb-pane-toggle" ${mb.hasPane ? 'checked' : ''}><span class="switch-slider"></span></label>
+      </div>
+      ${mb.hasPane ? `<input type="number" class="form-input mt-8" id="mb-pane-grams" value="${mb.paneGrams}" step="5">` : ''}
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Proteina</label>
+      <select class="form-input" id="mb-proteina">
+        <optgroup label="Carne / Pesce">
+          ${PROTEINE.filter(p => p.kind === 'carne').map(p => `<option value="${p.id}" ${mb.proteinaId === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
+        </optgroup>
+        <optgroup label="Uova">
+          <option value="uova" ${mb.proteinaId === 'uova' ? 'selected' : ''}>Uova</option>
+        </optgroup>
+        <optgroup label="Formaggi">
+          ${PROTEINE.filter(p => p.kind === 'formaggio').map(p => `<option value="${p.id}" ${mb.proteinaId === p.id ? 'selected' : ''}>${p.name}</option>`).join('')}
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <div class="flex-between">
+        <label class="form-label" style="margin-bottom:0">Aggiungi legumi</label>
+        <label class="switch"><input type="checkbox" id="mb-legumi-toggle" ${mb.hasLegumi ? 'checked' : ''}><span class="switch-slider"></span></label>
+      </div>
+      ${mb.hasLegumi ? `
+        <div class="pill-group mt-8" id="mb-legumi-group">
+          ${LEGUMI.map(l => `<button type="button" class="pill ${mb.legumeId === l.id ? 'active' : ''}" data-legume="${l.id}">${l.name}</button>`).join('')}
+        </div>
+      ` : ''}
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Verdure (300 g)</label>
+      <select class="form-input" id="mb-verdura">
+        <option value="">Verdure miste</option>
+        ${VERDURE_OPZIONALI.map(v => `<option value="${v.id}" ${mb.verduraId === v.id ? 'selected' : ''}>${v.name}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Olio EVO</label>
+      <div class="stepper">
+        <button type="button" class="stepper-btn" id="mb-oil-minus">−</button>
+        <span class="stepper-value">${fmtNum(mb.oilGrams)} g</span>
+        <button type="button" class="stepper-btn" id="mb-oil-plus">+</button>
+      </div>
+    </div>
+
+    <div class="meal-summary">
+      <div class="text-sm text-gray mb-8">Riepilogo automatico</div>
+      ${items.map(i => `
+        <div class="list-item" style="padding:6px 0">
+          <div class="list-info"><div class="list-name">${escapeHtml(i.name)}</div></div>
+          <div class="list-value">${i.unitLabel ? escapeHtml(i.unitLabel) : fmtNum(i.grams) + ' g'}</div>
+        </div>
+      `).join('')}
+      <div class="mt-8 text-lime fw-bold">${fmtNum(totals.kcal)} kcal · P ${fmtNum(totals.protein)}g · C ${fmtNum(totals.carbs)}g · G ${fmtNum(totals.fat)}g</div>
+    </div>
+
+    ${mb.type === 'cena' ? `
+      <div class="form-group mt-16">
+        <div class="flex-between">
+          <label class="form-label" style="margin-bottom:0">Usa anche come pranzo di domani</label>
+          <label class="switch"><input type="checkbox" id="mb-copy-tomorrow" ${mb.copyToTomorrow ? 'checked' : ''}><span class="switch-slider"></span></label>
+        </div>
+      </div>
+    ` : ''}
+
+    <button class="btn btn-lime btn-block mt-16" id="mb-save-btn">Salva pasto</button>
+  `;
+}
+
+function wireMealBuilderModal() {
+  const sheet = el('mealbuilder-sheet');
+  const mb = state.mealBuilder;
+
+  sheet.querySelectorAll('[data-cereale]').forEach(btn => {
+    btn.onclick = () => { mb.cerealeId = btn.dataset.cereale; rerenderMealBuilder(); };
+  });
+
+  el('mb-pane-toggle').onchange = (e) => {
+    mb.hasPane = e.target.checked;
+    if (mb.hasPane && !mb.paneGrams) mb.paneGrams = 50;
+    rerenderMealBuilder();
+  };
+  const paneInput = document.getElementById('mb-pane-grams');
+  if (paneInput) paneInput.oninput = (e) => { mb.paneGrams = parseFloat(e.target.value) || 0; rerenderMealBuilder(); };
+
+  el('mb-proteina').onchange = (e) => {
+    mb.proteinaId = e.target.value;
+    if (!mb.oilTouched) {
+      const p = PROTEINE.find(p => p.id === e.target.value);
+      mb.oilGrams = defaultOilGrams(p.kind);
+    }
+    rerenderMealBuilder();
+  };
+
+  el('mb-legumi-toggle').onchange = (e) => { mb.hasLegumi = e.target.checked; rerenderMealBuilder(); };
+  const legumiGroup = document.getElementById('mb-legumi-group');
+  if (legumiGroup) legumiGroup.querySelectorAll('[data-legume]').forEach(btn => {
+    btn.onclick = () => { mb.legumeId = btn.dataset.legume; rerenderMealBuilder(); };
+  });
+
+  el('mb-verdura').onchange = (e) => { mb.verduraId = e.target.value || null; rerenderMealBuilder(); };
+
+  el('mb-oil-minus').onclick = () => { mb.oilGrams = Math.max(0, mb.oilGrams - 5); mb.oilTouched = true; rerenderMealBuilder(); };
+  el('mb-oil-plus').onclick = () => { mb.oilGrams += 5; mb.oilTouched = true; rerenderMealBuilder(); };
+
+  const copyToggle = document.getElementById('mb-copy-tomorrow');
+  if (copyToggle) copyToggle.onchange = (e) => { mb.copyToTomorrow = e.target.checked; };
+
+  el('mb-save-btn').onclick = saveMealBuilder;
+}
+
+function rerenderMealBuilder() {
+  el('mealbuilder-sheet').innerHTML = renderMealBuilderModal();
+  wireMealBuilderModal();
+}
+
+function openMealBuilder(type) {
+  const defaultProtein = PROTEINE[0];
+  state.mealBuilder = {
+    type,
+    cerealeId: CEREALI[0].id,
+    hasPane: false,
+    paneGrams: 50,
+    proteinaId: defaultProtein.id,
+    hasLegumi: false,
+    legumeId: LEGUMI[0].id,
+    verduraId: null,
+    oilGrams: defaultOilGrams(defaultProtein.kind),
+    oilTouched: false,
+    copyToTomorrow: true,
+  };
+  rerenderMealBuilder();
+  openModal('modal-mealbuilder');
+}
+
+async function saveMealBuilder() {
+  const mb = state.mealBuilder;
+  const items = buildMainMeal(mb);
+  const totals = totalsOf(items);
+  await addMeal(today(), mb.type, items, totals);
+  if (mb.type === 'cena' && mb.copyToTomorrow) {
+    await addMeal(addDays(today(), 1), 'pranzo', items, totals);
+  }
+  state.mealBuilder = null;
+  closeModal('modal-mealbuilder');
+  await refresh();
+}
+
+// ── Spuntini: modale ─────────────────────────────────────────
+
+function allSnackPresets() {
+  return [
+    ...SNACK_PRESETS_DEFAULT,
+    ...state.snackPresets.map(p => ({ id: p.id, name: p.name, items: p.items, custom: true })),
+  ];
+}
+
+function renderSnackModal() {
+  const presets = allSnackPresets();
+  const selected = presets.find(p => p.id === state.snackSelectedPresetId);
+  const items = selected ? buildPresetItems(selected.items) : [];
+  const totals = totalsOf(items);
+
+  return `
+    <div class="modal-handle"></div>
+    <div class="modal-title">${MEAL_LABELS[state.snackSlot]}</div>
+
+    <div class="pill-group mb-16" id="snack-preset-group">
+      ${presets.map(p => `<button type="button" class="pill ${state.snackSelectedPresetId === p.id ? 'active' : ''}" data-preset="${p.id}">${escapeHtml(p.name)}${p.custom ? ' 👤' : ''}</button>`).join('')}
+    </div>
+
+    ${selected ? `
+      <div class="meal-summary mb-16">
+        ${items.map(i => `
+          <div class="list-item" style="padding:6px 0">
+            <div class="list-info"><div class="list-name">${escapeHtml(i.name)}</div></div>
+            <div class="list-value">${fmtNum(i.grams)} g</div>
+          </div>
+        `).join('')}
+        <div class="mt-8 text-lime fw-bold">${fmtNum(totals.kcal)} kcal · P ${fmtNum(totals.protein)}g · C ${fmtNum(totals.carbs)}g · G ${fmtNum(totals.fat)}g</div>
+      </div>
+      <button class="btn btn-lime btn-block mb-16" id="snack-save-btn">✓ Fatto</button>
+    ` : ''}
+
+    <div class="section-toggle" id="snack-custom-toggle">
+      <span>+ Crea nuovo preset</span>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="section-body" id="snack-custom-body">
+      <div class="form-group mt-12">
+        <label class="form-label">Nome preset</label>
+        <input type="text" class="form-input" id="snack-custom-name" placeholder="es. Yogurt e noci" value="${escapeHtml(state.snackCustomName)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Alimento</label>
+        <select class="form-input" id="snack-custom-ingredient">
+          ${INGREDIENTS.map(i => `<option value="${i.id}" ${state.snackCustomIngredientId === i.id ? 'selected' : ''}>${escapeHtml(i.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Grammi</label>
+        <input type="number" class="form-input" id="snack-custom-grams" value="${state.snackCustomGrams}">
+      </div>
+      <button class="btn btn-ghost btn-block" id="snack-custom-save-btn">Salva preset</button>
+    </div>
+  `;
+}
+
+function wireSnackModal() {
+  const sheet = el('snack-sheet');
+  sheet.querySelectorAll('[data-preset]').forEach(btn => {
+    btn.onclick = () => { state.snackSelectedPresetId = btn.dataset.preset; rerenderSnack(); };
+  });
+  const saveBtn = document.getElementById('snack-save-btn');
+  if (saveBtn) saveBtn.onclick = saveSnack;
+
+  el('snack-custom-toggle').onclick = () => {
+    el('snack-custom-toggle').classList.toggle('open');
+    el('snack-custom-body').classList.toggle('open');
+  };
+  el('snack-custom-name').oninput = (e) => { state.snackCustomName = e.target.value; };
+  el('snack-custom-ingredient').onchange = (e) => { state.snackCustomIngredientId = e.target.value; };
+  el('snack-custom-grams').oninput = (e) => { state.snackCustomGrams = parseFloat(e.target.value) || 0; };
+  el('snack-custom-save-btn').onclick = saveCustomSnackPreset;
+}
+
+function rerenderSnack() {
+  el('snack-sheet').innerHTML = renderSnackModal();
+  wireSnackModal();
+}
+
+function openSnackModal(slotKey) {
+  state.snackSlot = slotKey;
+  state.snackSelectedPresetId = null;
+  rerenderSnack();
+  openModal('modal-snack');
+}
+
+async function saveSnack() {
+  const presets = allSnackPresets();
+  const selected = presets.find(p => p.id === state.snackSelectedPresetId);
+  if (!selected) return;
+  const items = buildPresetItems(selected.items);
+  const totals = totalsOf(items);
+  await addMeal(today(), state.snackSlot, items, totals);
+  closeModal('modal-snack');
+  await refresh();
+}
+
+async function saveCustomSnackPreset() {
+  const name = state.snackCustomName.trim();
+  const grams = state.snackCustomGrams;
+  if (!name || !grams) return;
+  const items = [{ ingredientId: state.snackCustomIngredientId, grams }];
+  const totals = totalsOf(buildPresetItems(items));
+  await addSnackPreset(name, items, totals);
+  state.snackPresets = await fetchSnackPresets();
+  state.snackCustomName = '';
+  rerenderSnack();
+}
+
 // ── Modals ───────────────────────────────────────────────────
 
 function modalsHtml(weightLogs) {
@@ -385,8 +876,27 @@ function modalsHtml(weightLogs) {
           <label class="form-label">Peso obiettivo (kg)</label>
           <input type="number" step="0.1" class="form-input" id="set-weight-goal" value="${state.settings?.weight_goal ?? ''}" placeholder="es. 90">
         </div>
+        <div class="form-group">
+          <label class="form-label">Target calorico giornaliero (kcal)</label>
+          <input type="number" step="50" class="form-input" id="set-kcal-target" value="${state.settings?.kcal_target ?? 2000}" placeholder="es. 2000">
+        </div>
         <button class="btn btn-lime btn-block" id="save-settings-btn">Salva</button>
       </div>
+    </div>
+
+    <!-- Colazione -->
+    <div class="modal-overlay" id="modal-breakfast">
+      <div class="modal-sheet" id="breakfast-sheet"></div>
+    </div>
+
+    <!-- Pranzo / Cena -->
+    <div class="modal-overlay" id="modal-mealbuilder">
+      <div class="modal-sheet" id="mealbuilder-sheet"></div>
+    </div>
+
+    <!-- Spuntini -->
+    <div class="modal-overlay" id="modal-snack">
+      <div class="modal-sheet" id="snack-sheet"></div>
     </div>
 
     <!-- Attività -->
@@ -421,6 +931,9 @@ function wireEvents() {
   setupModalClose('modal-weight');
   setupModalClose('modal-settings');
   setupModalClose('modal-activity');
+  setupModalClose('modal-breakfast');
+  setupModalClose('modal-mealbuilder');
+  setupModalClose('modal-snack');
 
   // Weight
   el('weight-current-block').onclick = () => {
@@ -448,10 +961,35 @@ function wireEvents() {
   el('save-settings-btn').onclick = async () => {
     const patch = {
       weight_goal: parseFloat(el('set-weight-goal').value) || null,
+      kcal_target: parseFloat(el('set-kcal-target').value) || 2000,
     };
     await saveSettings(patch);
     closeModal('modal-settings');
     await refresh();
+  };
+
+  // Alimentazione
+  root.querySelectorAll('[data-open-meal]').forEach(rowEl => {
+    const key = rowEl.dataset.openMeal;
+    if (state.mealsToday[key]) return;
+    rowEl.onclick = () => {
+      if (key === 'colazione') openBreakfastModal();
+      else if (key === 'pranzo' || key === 'cena') openMealBuilder(key);
+      else openSnackModal(key);
+    };
+  });
+
+  root.querySelectorAll('[data-del-meal]').forEach(btn => {
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      await deleteMeal(btn.dataset.delMeal);
+      await refresh();
+    };
+  });
+
+  el('food-stats-toggle').onclick = () => {
+    el('food-stats-toggle').classList.toggle('open');
+    el('food-stats-body').classList.toggle('open');
   };
 
   // Activity
