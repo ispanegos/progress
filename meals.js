@@ -189,7 +189,7 @@ export function defaultCarbGrams(carboidratoId, proteinKind, hasLegumi, hasPane,
 // Costruisce la composizione completa di un pranzo/cena a partire dalle
 // scelte dell'utente. Le quantità (proteina, carboidrato, olio) sono già
 // calcolate automaticamente in base a proteina + legumi + pane.
-export function buildMainMeal({ carboidratoId, proteinaId, hasLegumi, legumeId, hasPane, paneGrams, verduraId }) {
+export function buildMainMeal({ carboidratoId, proteinaId, hasLegumi, legumeId, hasPane, paneGrams }) {
   const proteina = PROTEINE.find(p => p.id === proteinaId) ?? PROTEINE[0];
   const effectiveHasPane = hasPane && carboidratoId !== 'pane';
   const items = [];
@@ -218,8 +218,7 @@ export function buildMainMeal({ carboidratoId, proteinaId, hasLegumi, legumeId, 
   if (carbGrams > 0) items.push(item('carboidrato', carboidrato.ingredientId, carbGrams));
   if (effectiveHasPane) items.push(item('pane', PANE.ingredientId, paneGrams));
 
-  const verdura = verduraId ? VERDURE_OPZIONALI.find(v => v.id === verduraId) : null;
-  items.push(item('verdure', verdura ? verdura.ingredientId : VERDURE_DEFAULT_ID, VERDURE_GRAMS));
+  items.push(item('verdure', VERDURE_DEFAULT_ID, VERDURE_GRAMS));
 
   items.push(item('olio', OLIO_INGREDIENT_ID, computeOilGrams(items)));
 
@@ -229,14 +228,28 @@ export function buildMainMeal({ carboidratoId, proteinaId, hasLegumi, legumeId, 
 // ── Spuntini ─────────────────────────────────────────────────
 
 export const SNACK_PRESETS_DEFAULT = [
-  { id: 'skyr',             name: 'Skyr',                       items: [{ ingredientId: 'ing053', grams: 150 }] },
-  { id: 'yogurtgreco',      name: 'Yogurt greco',                items: [{ ingredientId: 'ing052', grams: 170 }] },
-  { id: 'yogurtproteico',   name: 'Yogurt proteico',             items: [{ ingredientId: 'ing131', grams: 150 }] },
-  { id: 'frutto',           name: 'Frutto',                      items: [{ ingredientId: 'ing089', grams: 150 }] },
-  { id: 'galletteaffettato',name: 'Gallette + affettato magro',  items: [{ ingredientId: 'ing013', grams: 20 }, { ingredientId: 'ing041', grams: 50 }] },
-  { id: 'fruttasecca',      name: 'Frutta secca',                items: [{ ingredientId: 'ing105', grams: 20 }] },
+  { id: 'skyr0',           name: 'Skyr 0%',                                    items: [{ ingredientId: 'ing053', grams: 150 }] },
+  { id: 'yogurtgreco0',    name: 'Yogurt greco 0%',                            items: [{ ingredientId: 'ing128', grams: 170 }] },
+  { id: 'yogurtproteico',  name: 'Yogurt proteico',                            items: [{ ingredientId: 'ing131', grams: 150, unitLabel: '1 vasetto' }] },
+  { id: 'fiocchidilatte',  name: 'Fiocchi di latte',                           items: [{ ingredientId: 'ing055', grams: 100 }] },
+  { id: 'bresaola',        name: 'Bresaola',                                   items: [{ ingredientId: 'ing041', grams: 50 }] },
+  { id: 'fesatacchino',    name: 'Fesa di tacchino',                           items: [{ ingredientId: 'ing148', grams: 60 }] },
+  { id: 'prosciuttocotto', name: 'Prosciutto cotto sgrassato',                 items: [{ ingredientId: 'ing149', grams: 60 }] },
+  { id: 'parmigiano',      name: 'Parmigiano Reggiano',                        items: [{ ingredientId: 'ing061', grams: 25 }] },
+  { id: 'mandorle',        name: 'Mandorle',                                   items: [{ ingredientId: 'ing105', grams: 20 }] },
+  { id: 'noci',            name: 'Noci',                                       items: [{ ingredientId: 'ing106', grams: 20 }] },
+  { id: 'pistacchi',       name: 'Pistacchi',                                  items: [{ ingredientId: 'ing151', grams: 20 }] },
+  { id: 'mela',            name: 'Mela',                                       items: [{ ingredientId: 'ing086', grams: 180, unitLabel: '~180 g' }] },
+  { id: 'pera',            name: 'Pera',                                       items: [{ ingredientId: 'ing087', grams: 180, unitLabel: '~180 g' }] },
+  { id: 'arancia',         name: 'Arancia',                                    items: [{ ingredientId: 'ing088', grams: 200, unitLabel: '~200 g' }] },
+  { id: 'kiwi',            name: 'Kiwi',                                       items: [{ ingredientId: 'ing090', grams: 150, unitLabel: '~150 g' }] },
+  { id: 'banana',          name: 'Banana',                                     items: [{ ingredientId: 'ing089', grams: 100, unitLabel: '~100 g' }] },
+  { id: 'ananas',          name: "Ananas in succo d'ananas, sgocciolato",      items: [{ ingredientId: 'ing150', grams: 150 }] },
+  { id: 'galletteFesa',    name: 'Gallette di riso + fesa',                    items: [{ ingredientId: 'ing013', grams: 18, unitLabel: '2 gallette' }, { ingredientId: 'ing148', grams: 30 }] },
+  { id: 'gallettePhila',   name: 'Gallette + Philadelphia Light',              items: [{ ingredientId: 'ing013', grams: 18, unitLabel: '2 gallette' }, { ingredientId: 'ing130', grams: 30 }] },
+  { id: 'paneBresaola',    name: 'Pane + bresaola',                            items: [{ ingredientId: 'ing001', grams: 30 }, { ingredientId: 'ing041', grams: 30 }] },
 ];
 
 export function buildPresetItems(presetItems) {
-  return presetItems.map(p => item('preset', p.ingredientId, p.grams));
+  return presetItems.map(p => item('preset', p.ingredientId, p.grams, p.unitLabel ?? null));
 }

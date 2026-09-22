@@ -66,6 +66,8 @@ const DEFAULT_INGREDIENTS = [
   { id:'ing040', name:'Speck',                   categoryId:'cat03', kcalPer100:320, proteinPer100:27.0, carbsPer100:0.3,  fatPer100:23.0, fiberPer100:0.0  },
   { id:'ing041', name:'Bresaola',                categoryId:'cat03', kcalPer100:151, proteinPer100:32.0, carbsPer100:0.0,  fatPer100:2.3,  fiberPer100:0.0  },
   { id:'ing042', name:'Mortadella',              categoryId:'cat03', kcalPer100:311, proteinPer100:15.7, carbsPer100:0.0,  fatPer100:27.7, fiberPer100:0.0  },
+  { id:'ing148', name:'Fesa di tacchino',        categoryId:'cat03', kcalPer100:106, proteinPer100:24.0, carbsPer100:1.0,  fatPer100:1.2,  fiberPer100:0.0  },
+  { id:'ing149', name:'Prosciutto cotto sgrassato', categoryId:'cat03', kcalPer100:95, proteinPer100:20.0, carbsPer100:1.0, fatPer100:1.5,  fiberPer100:0.0  },
   // LEGUMI
   { id:'ing043', name:'Ceci (secchi)',           categoryId:'cat04', kcalPer100:378, proteinPer100:20.5, carbsPer100:60.7, fatPer100:4.9,  fiberPer100:15.0 },
   { id:'ing044', name:'Lenticchie (secche)',     categoryId:'cat04', kcalPer100:325, proteinPer100:26.0, carbsPer100:54.0, fatPer100:1.1,  fiberPer100:11.5 },
@@ -150,6 +152,7 @@ const DEFAULT_INGREDIENTS = [
   { id:'ing102', name:'Avocado',                 categoryId:'cat07', kcalPer100:160, proteinPer100:2.0,  carbsPer100:8.5,  fatPer100:14.7, fiberPer100:6.7  },
   { id:'ing103', name:'Lamponi',                 categoryId:'cat07', kcalPer100:52,  proteinPer100:1.2,  carbsPer100:11.9, fatPer100:0.7,  fiberPer100:6.5  },
   { id:'ing104', name:'Mirtilli',                categoryId:'cat07', kcalPer100:57,  proteinPer100:0.7,  carbsPer100:14.5, fatPer100:0.3,  fiberPer100:2.4  },
+  { id:'ing150', name:"Ananas in succo, sgocciolato", categoryId:'cat07', kcalPer100:53, proteinPer100:0.4, carbsPer100:13.0, fatPer100:0.1, fiberPer100:1.0  },
   // FRUTTA SECCA
   { id:'ing105', name:'Mandorle',                categoryId:'cat08', kcalPer100:607, proteinPer100:21.1, carbsPer100:19.7, fatPer100:53.8, fiberPer100:12.5 },
   { id:'ing106', name:'Noci',                    categoryId:'cat08', kcalPer100:689, proteinPer100:14.3, carbsPer100:13.7, fatPer100:65.2, fiberPer100:6.7  },
@@ -157,6 +160,7 @@ const DEFAULT_INGREDIENTS = [
   { id:'ing108', name:'Arachidi',                categoryId:'cat08', kcalPer100:599, proteinPer100:28.1, carbsPer100:16.1, fatPer100:49.4, fiberPer100:8.5  },
   { id:'ing136', name:'Granella di nocciole',    categoryId:'cat08', kcalPer100:628, proteinPer100:15.0, carbsPer100:17.0, fatPer100:61.0, fiberPer100:9.7  },
   { id:'ing137', name:'Granella di pistacchio',  categoryId:'cat08', kcalPer100:562, proteinPer100:20.6, carbsPer100:27.2, fatPer100:45.4, fiberPer100:10.3 },
+  { id:'ing151', name:'Pistacchi',               categoryId:'cat08', kcalPer100:562, proteinPer100:20.6, carbsPer100:27.2, fatPer100:45.4, fiberPer100:10.3 },
   // CONDIMENTI
   { id:'ing109', name:'Olio EVO',                categoryId:'cat09', kcalPer100:884, proteinPer100:0.0,  carbsPer100:0.0,  fatPer100:99.9, fiberPer100:0.0  },
   { id:'ing110', name:'Aceto balsamico',         categoryId:'cat09', kcalPer100:88,  proteinPer100:0.5,  carbsPer100:17.0, fatPer100:0.0,  fiberPer100:0.0  },

@@ -385,6 +385,14 @@ select.form-input { appearance: none; cursor: pointer; }
   color: var(--black);
 }
 
+.pill-static {
+  display: inline-flex;
+  align-items: center;
+  cursor: default;
+  touch-action: auto;
+  color: var(--gray2);
+}
+
 .switch {
   position: relative;
   display: inline-block;

@@ -675,11 +675,16 @@ function renderMealBuilderModal() {
     </div>
 
     <div class="form-group">
-      <label class="form-label">Verdure (300 g)</label>
-      <select class="form-input" id="mb-verdura">
-        <option value="">Verdure miste</option>
-        ${VERDURE_OPZIONALI.map(v => `<option value="${v.id}" ${mb.verduraId === v.id ? 'selected' : ''}>${v.name}</option>`).join('')}
-      </select>
+      <label class="form-label" style="margin-bottom:8px">Verdure — 300 g</label>
+      <div class="section-toggle" id="mb-verdure-list-toggle">
+        <span>Vedi le verdure che puoi usare</span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="section-body" id="mb-verdure-list-body">
+        <div class="pill-group mt-8">
+          ${VERDURE_OPZIONALI.map(v => `<span class="pill pill-static">${escapeHtml(v.name)}</span>`).join('')}
+        </div>
+      </div>
     </div>
 
     <div class="meal-summary">
@@ -742,7 +747,10 @@ function wireMealBuilderModal() {
     btn.onclick = () => { mb.legumeId = btn.dataset.legume; rerenderMealBuilder(); };
   });
 
-  el('mb-verdura').onchange = (e) => { mb.verduraId = e.target.value || null; rerenderMealBuilder(); };
+  el('mb-verdure-list-toggle').onclick = () => {
+    el('mb-verdure-list-toggle').classList.toggle('open');
+    el('mb-verdure-list-body').classList.toggle('open');
+  };
 
   const copyToggle = document.getElementById('mb-copy-tomorrow');
   if (copyToggle) copyToggle.onchange = (e) => { mb.copyToTomorrow = e.target.checked; };
@@ -766,7 +774,6 @@ function openMealBuilder(type) {
     proteinaId: defaultProtein.id,
     hasLegumi: false,
     legumeId: LEGUMI[0].id,
-    verduraId: null,
     copyToTomorrow: true,
   };
   rerenderMealBuilder();
