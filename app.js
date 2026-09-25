@@ -2,7 +2,7 @@
 // PROGRESS — App
 // ============================================================
 import {
-  getSession, onAuthChange, signIn, signUp, signOut,
+  getSession, onAuthChange, signIn, signUp, signOut, resetPasswordForEmail, updatePassword,
   fetchSettings, saveSettings,
   fetchWeightLogs, addWeightLog, deleteWeightLog,
   fetchAllActivityEntries, addActivityEntry, updateActivityEntry, deleteActivityEntry,
@@ -42,7 +42,8 @@ let state = {
 
 // ── Boot ─────────────────────────────────────────────────────
 
-onAuthChange((session) => {
+onAuthChange((session, event) => {
+  if (event === 'PASSWORD_RECOVERY') { renderPasswordRecovery(); return; }
   if (session) renderApp();
   else renderAuth();
 });
@@ -62,7 +63,7 @@ function renderAuth() {
         <div class="tag">Il tuo percorso, in un unico posto.</div>
       </div>
 
-      <div class="auth-tabs">
+      <div class="auth-tabs" id="auth-tabs">
         <button class="auth-tab active" id="tab-signin">Accedi</button>
         <button class="auth-tab" id="tab-signup">Registrati</button>
       </div>
@@ -71,36 +72,69 @@ function renderAuth() {
         <label class="form-label">Email</label>
         <input type="email" class="form-input" id="auth-email" placeholder="tu@email.com" autocomplete="email">
       </div>
-      <div class="form-group">
+      <div class="form-group" id="auth-password-group">
         <label class="form-label">Password</label>
         <input type="password" class="form-input" id="auth-password" placeholder="••••••••" autocomplete="current-password">
       </div>
+      <div class="auth-forgot" id="auth-forgot-link">Password dimenticata?</div>
+      <div class="auth-forgot" id="auth-back-link" style="display:none">← Torna al login</div>
       <div class="form-error" id="auth-error"></div>
       <button class="btn btn-lime btn-block" id="auth-submit">Accedi</button>
     </div>
   `;
 
-  let mode = 'signin';
+  let mode = 'signin'; // 'signin' | 'signup' | 'forgot'
+  const tabs = el('auth-tabs');
   const tabSignin = el('tab-signin');
   const tabSignup = el('tab-signup');
+  const passwordGroup = el('auth-password-group');
+  const forgotLink = el('auth-forgot-link');
+  const backLink = el('auth-back-link');
   const submitBtn = el('auth-submit');
   const errBox = el('auth-error');
 
   function setMode(m) {
     mode = m;
+    errBox.textContent = '';
+    errBox.style.color = '';
+    tabs.style.display = m === 'forgot' ? 'none' : 'flex';
+    passwordGroup.style.display = m === 'forgot' ? 'none' : 'block';
+    forgotLink.style.display = m === 'signin' ? 'block' : 'none';
+    backLink.style.display = m === 'forgot' ? 'block' : 'none';
     tabSignin.classList.toggle('active', m === 'signin');
     tabSignup.classList.toggle('active', m === 'signup');
-    submitBtn.textContent = m === 'signin' ? 'Accedi' : 'Crea account';
-    errBox.textContent = '';
+    if (m === 'signin') submitBtn.textContent = 'Accedi';
+    else if (m === 'signup') submitBtn.textContent = 'Crea account';
+    else submitBtn.textContent = 'Invia link di recupero';
   }
 
   tabSignin.onclick = () => setMode('signin');
   tabSignup.onclick = () => setMode('signup');
+  forgotLink.onclick = () => setMode('forgot');
+  backLink.onclick = () => setMode('signin');
 
   submitBtn.onclick = async () => {
     const email = el('auth-email').value.trim();
-    const password = el('auth-password').value;
     errBox.textContent = '';
+    errBox.style.color = '';
+
+    if (mode === 'forgot') {
+      if (!email) { errBox.textContent = 'Inserisci la tua email.'; return; }
+      submitBtn.disabled = true;
+      submitBtn.textContent = '...';
+      const { error } = await resetPasswordForEmail(email);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Invia link di recupero';
+      if (error) {
+        errBox.textContent = error.message;
+      } else {
+        errBox.style.color = 'var(--lime)';
+        errBox.textContent = 'Se l\'indirizzo esiste, ti abbiamo inviato una mail con il link per reimpostare la password.';
+      }
+      return;
+    }
+
+    const password = el('auth-password').value;
     if (!email || !password) {
       errBox.textContent = 'Inserisci email e password.';
       return;
@@ -117,6 +151,59 @@ function renderAuth() {
     } else if (mode === 'signup') {
       errBox.style.color = 'var(--lime)';
       errBox.textContent = 'Account creato. Controlla la mail se richiesta conferma, poi accedi.';
+    }
+  };
+
+  setMode('signin');
+}
+
+// ── Recupero password ────────────────────────────────────────
+
+function renderPasswordRecovery() {
+  root.innerHTML = `
+    <div class="auth-screen">
+      <div class="auth-logo">
+        <div class="brand">PROGRESS<span class="text-lime">.</span></div>
+        <div class="tag">Imposta una nuova password</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nuova password</label>
+        <input type="password" class="form-input" id="recovery-password" placeholder="••••••••" autocomplete="new-password">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Conferma password</label>
+        <input type="password" class="form-input" id="recovery-password-confirm" placeholder="••••••••" autocomplete="new-password">
+      </div>
+      <div class="form-error" id="recovery-error"></div>
+      <button class="btn btn-lime btn-block" id="recovery-submit">Salva nuova password</button>
+    </div>
+  `;
+
+  const submitBtn = el('recovery-submit');
+  const errBox = el('recovery-error');
+
+  submitBtn.onclick = async () => {
+    const password = el('recovery-password').value;
+    const confirm = el('recovery-password-confirm').value;
+    errBox.textContent = '';
+    if (!password || password.length < 6) {
+      errBox.textContent = 'La password deve avere almeno 6 caratteri.';
+      return;
+    }
+    if (password !== confirm) {
+      errBox.textContent = 'Le due password non coincidono.';
+      return;
+    }
+    submitBtn.disabled = true;
+    submitBtn.textContent = '...';
+    const { error } = await updatePassword(password);
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Salva nuova password';
+    if (error) {
+      errBox.textContent = error.message;
+    } else {
+      await renderApp();
     }
   };
 }

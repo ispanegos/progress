@@ -14,7 +14,7 @@ export async function getSession() {
 }
 
 export function onAuthChange(cb) {
-  supabase.auth.onAuthStateChange((_event, session) => cb(session));
+  supabase.auth.onAuthStateChange((event, session) => cb(session, event));
 }
 
 export async function signIn(email, password) {
@@ -27,6 +27,14 @@ export async function signUp(email, password) {
 
 export async function signOut() {
   return supabase.auth.signOut();
+}
+
+export async function resetPasswordForEmail(email) {
+  return supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+}
+
+export async function updatePassword(newPassword) {
+  return supabase.auth.updateUser({ password: newPassword });
 }
 
 // ── Settings (peso obiettivo) ───────────────────────────────

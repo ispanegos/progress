@@ -552,6 +552,15 @@ select.form-input { appearance: none; cursor: pointer; }
 
 .auth-tab.active { background: var(--lime); color: var(--black); }
 
+.auth-forgot {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray2);
+  cursor: pointer;
+  margin: -8px 0 16px;
+}
+
 .auth-screen {
   min-height: 100%;
   display: flex;
